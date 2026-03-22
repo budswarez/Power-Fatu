@@ -59,6 +59,7 @@ export default function HistoricalPage() {
   const [csvPreview, setCsvPreview] = useState<{ valid: ParsedRow[]; errors: string[] } | null>(null);
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<{ imported: number; updated: number; skipped: number } | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -239,9 +240,7 @@ export default function HistoricalPage() {
     return { valid, errors };
   }
 
-  function handleCsvChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  function processFile(file: File) {
     setCsvFile(file);
     setImportResult(null);
     setCsvPreview(null);
@@ -251,6 +250,20 @@ export default function HistoricalPage() {
       setCsvPreview(parseCSV(text));
     };
     reader.readAsText(file, "UTF-8");
+  }
+
+  function handleCsvChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    processFile(file);
+  }
+
+  function handleDrop(e: React.DragEvent<HTMLLabelElement>) {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (!file) return;
+    processFile(file);
   }
 
   async function handleImport() {
@@ -371,7 +384,17 @@ export default function HistoricalPage() {
             </div>
 
             {/* Upload area */}
-            <label className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed border-[var(--border-subtle)] rounded-xl cursor-pointer hover:border-[var(--accent-amber)]/40 hover:bg-white/[0.02] transition-all">
+            <label
+              className="flex flex-col items-center justify-center w-full h-24 border-2 border-dashed rounded-xl cursor-pointer transition-all"
+              style={{
+                borderColor: isDragging ? "var(--accent-amber)" : "var(--border-subtle)",
+                background: isDragging ? "color-mix(in srgb, var(--accent-amber) 5%, transparent)" : undefined,
+              }}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragEnter={(e) => { e.preventDefault(); setIsDragging(true); }}
+              onDragLeave={() => setIsDragging(false)}
+              onDrop={handleDrop}
+            >
               <input
                 type="file"
                 accept=".csv,text/csv"
