@@ -59,5 +59,5 @@ export interface DailyChartPoint {
   day: number;
   historical: number;
   current: number;
-  projected: number;
+  projected: number | null;
 }

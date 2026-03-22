@@ -8,6 +8,7 @@ import {
   CalendarClock,
   CalendarCheck2,
   TrendingUp,
+  Settings2,
 } from "lucide-react";
 
 const nav = [
@@ -57,9 +58,16 @@ export function Sidebar() {
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="px-6 py-4 border-t border-[var(--border-subtle)]">
-        <p className="text-[11px] text-[var(--text-muted)]">
+      {/* Footer: Settings + version */}
+      <div className="px-3 pb-3 border-t border-[var(--border-subtle)] pt-3 space-y-1">
+        <Link
+          href="/settings"
+          className={`sidebar-link ${pathname === "/settings" ? "active" : ""}`}
+        >
+          <Settings2 className="w-[18px] h-[18px]" />
+          Configurações
+        </Link>
+        <p className="text-[11px] text-[var(--text-muted)] px-4 pt-1">
           v1.0 • Firebase Edition
         </p>
       </div>

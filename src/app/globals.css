@@ -14,6 +14,7 @@
   --accent-amber: #f59e0b;
   --accent-rose: #f43f5e;
   --accent-violet: #8b5cf6;
+  --accent-purple: #8b5cf6;
   --glass: rgba(30, 42, 66, 0.6);
   --glass-border: rgba(255, 255, 255, 0.06);
 }
@@ -81,12 +82,15 @@ body {
 .sidebar-link.active {
   background: rgba(59, 130, 246, 0.15);
   color: var(--accent-blue);
+  box-shadow: inset 3px 0 0 var(--accent-blue);
 }
 
 /* Input styles */
 input[type="text"],
 input[type="number"],
 input[type="email"],
+input[type="date"],
+input[type="month"],
 select {
   background: var(--bg-secondary);
   border: 1px solid var(--border-subtle);
@@ -96,10 +100,15 @@ select {
   font-size: 0.875rem;
   transition: border-color 0.2s;
   outline: none;
+  color-scheme: dark;
 }
 input:focus, select:focus {
   border-color: var(--accent-blue);
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+input:disabled, select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Button */
@@ -118,6 +127,16 @@ input:focus, select:focus {
   background: #2563eb;
   transform: translateY(-1px);
   box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+.btn-primary:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+.btn-primary:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: none;
 }
 
 .btn-danger {

@@ -14,7 +14,7 @@ import {
   Timestamp,
 } from "@/lib/firebase";
 import type { SalesChannel, DailySale } from "@/lib/types";
-import { CalendarClock, Save, Plus, Trash2 } from "lucide-react";
+import { CalendarClock, Pencil, Plus, Trash2 } from "lucide-react";
 
 export default function HistoricalPage() {
   const [channels, setChannels] = useState<SalesChannel[]>([]);
@@ -151,7 +151,7 @@ export default function HistoricalPage() {
           type="month"
           value={selectedMonth}
           onChange={(e) => setSelectedMonth(e.target.value)}
-          className="bg-[var(--bg-secondary)] border border-[var(--border-subtle)] rounded-lg px-3 py-2 text-sm text-[var(--text-primary)]"
+          className="w-44"
         />
       </div>
 
@@ -175,7 +175,7 @@ export default function HistoricalPage() {
             </div>
             <div>
               <label className="block text-xs text-[var(--text-muted)] mb-1">Data</label>
-              <input type="text" placeholder="AAAA-MM-DD" value={date} onChange={(e) => setDate(e.target.value)} className="w-full" />
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full" />
             </div>
             <div>
               <label className="block text-xs text-[var(--text-muted)] mb-1">Faturamento (R$)</label>
@@ -236,7 +236,7 @@ export default function HistoricalPage() {
                     <td className="px-5 py-3 text-right text-[var(--text-secondary)]">{s.order_count ?? "—"}</td>
                     <td className="px-5 py-3 text-right">
                       <button onClick={() => startEdit(s)} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/5 transition-all mr-1">
-                        <Save className="w-3.5 h-3.5" />
+                        <Pencil className="w-3.5 h-3.5" />
                       </button>
                       <button onClick={() => handleDelete(s.id)} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--accent-rose)] hover:bg-[var(--accent-rose)]/10 transition-all">
                         <Trash2 className="w-3.5 h-3.5" />

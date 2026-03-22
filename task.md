@@ -25,5 +25,18 @@
 - [x] Gráficos de tendências interativos que renderizam a progressão das informações diárias (`Recharts`).
 
 ## 6. Lançamento e Ajuste Fino
-- [ ] Otimizações UI/UX Finas (glassmorphism/cores estritas).
+- [x] Adicionar `/settings` na navegação lateral (sidebar).
+- [x] Unificar Dashboard e página /projection em uma única tela consolidada (KPIs, gráfico, confiança, intervalo, barra de meta, breakdown por canal % do total).
+- [x] Eliminar página /projection redundante.
+- [x] Alinhar algoritmos preditivos: `computeChannelProjection` e `projectMonthlyRevenue` agora usam ratio de performance vs histórico do mesmo período.
+- [x] Corrigir `projectMonthlyRevenue` para usar dados históricos reais na projeção.
+- [x] Corrigir linha projetada no gráfico (null antes do período projetado, sem falso zero).
+- [x] Unificar escopo do fetch histórico em todas as páginas (mês anterior).
+- [x] Corrigir variável CSS `--accent-purple` indefinida (bug de cor na página /projection).
+- [x] Corrigir inputs de data: `type="text"` → `type="date"` com date-picker nativo (dark mode).
+- [x] Corrigir ícone de edição nas tabelas: `Save` → `Pencil`.
+- [x] Mover Configurações para o rodapé fixo da sidebar, separado da navegação principal.
+- [x] Adicionar indicador visual (borda) no link ativo da sidebar.
+- [x] Padronizar input `type="month"` com o sistema de design global.
+- [x] Adicionar estados `disabled` e `active` nos botões primários.
 - [ ] Vercel deploy test (opcional).

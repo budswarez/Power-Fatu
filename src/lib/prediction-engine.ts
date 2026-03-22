@@ -40,8 +40,29 @@ export function computeChannelProjection(
   const historicalRevenue = historicalSales.reduce((sum, s) => sum + s.revenue, 0);
   const historicalOrders = historicalSales.reduce((sum, s) => sum + s.orders, 0);
 
-  const projectedRevenue = projectValue(currentRevenue, weight);
-  const projectedOrders = projectValue(currentOrders, weight);
+  // Historical accumulated for the same elapsed days (for performance ratio)
+  const histRevenueForSamePeriod = historicalSales
+    .filter((s) => s.day <= currentDay)
+    .reduce((sum, s) => sum + s.revenue, 0);
+  const histOrdersForSamePeriod = historicalSales
+    .filter((s) => s.day <= currentDay)
+    .reduce((sum, s) => sum + s.orders, 0);
+
+  let projectedRevenue: number;
+  let projectedOrders: number;
+
+  if (histRevenueForSamePeriod > 0 && historicalRevenue > 0) {
+    // Scale historical full month by current vs historical pace ratio
+    projectedRevenue = historicalRevenue * (currentRevenue / histRevenueForSamePeriod);
+  } else {
+    projectedRevenue = projectValue(currentRevenue, weight);
+  }
+
+  if (histOrdersForSamePeriod > 0 && historicalOrders > 0) {
+    projectedOrders = historicalOrders * (currentOrders / histOrdersForSamePeriod);
+  } else {
+    projectedOrders = projectValue(currentOrders, weight);
+  }
 
   const projectedTicket = projectedOrders > 0 ? projectedRevenue / projectedOrders : 0;
   const historicalTicket = historicalOrders > 0 ? historicalRevenue / historicalOrders : 0;
@@ -135,7 +156,7 @@ export function buildDailyChartData(
       day: d,
       historical: cumulativeHistorical,
       current: cumulativeCurrent,
-      projected: 0,
+      projected: null,
     });
   }
 
@@ -174,23 +195,55 @@ export function projectMonthlyRevenue(
   target?: number
 ): ProjectionResult {
   const accumulatedTotal = currentSales.reduce((sum, s) => sum + s.amount, 0);
-  
-  // Calculate unique days with sales
+
   const daysWithSales = new Set(currentSales.map((s) => new Date(s.date).getDate())).size;
-  const daysElapsed = Math.max(1, daysWithSales); // Avoid division by zero
-  
+  const daysElapsed = Math.max(1, daysWithSales);
   const dailyAverage = accumulatedTotal / daysElapsed;
-  
+
   const now = new Date();
   const totalDays = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
-  
-  const projected = dailyAverage * totalDays;
-  
-  // Confidence score based on how many days we have data for
   const confidence = Math.min(daysElapsed / totalDays, 1);
-  
-  // Dynamic bounds based on confidence
-  const margin = 0.15 * (1 - confidence); // up to 15% variance if low confidence
+
+  let projected: number;
+  let margin: number;
+
+  if (historicalSales.length > 0) {
+    // Find the most recent complete historical month
+    const latestHistDate = historicalSales.reduce((latest, s) => {
+      const d = new Date(s.date);
+      return d > latest ? d : latest;
+    }, new Date(0));
+    const latestMonth = latestHistDate.getMonth();
+    const latestYear = latestHistDate.getFullYear();
+
+    const baselineSales = historicalSales.filter((s) => {
+      const d = new Date(s.date);
+      return d.getMonth() === latestMonth && d.getFullYear() === latestYear;
+    });
+
+    // Historical accumulated for the same elapsed days
+    const baselineForSamePeriod = baselineSales
+      .filter((s) => new Date(s.date).getDate() <= daysElapsed)
+      .reduce((sum, s) => sum + s.amount, 0);
+
+    const baselineFullMonth = baselineSales.reduce((sum, s) => sum + s.amount, 0);
+
+    if (baselineForSamePeriod > 0 && baselineFullMonth > 0) {
+      // Performance ratio: current pace vs same period last month
+      const performanceRatio = accumulatedTotal / baselineForSamePeriod;
+      projected = baselineFullMonth * performanceRatio;
+    } else {
+      projected = dailyAverage * totalDays;
+    }
+
+    // Tighter interval when historical data anchors the projection
+    margin = 0.10 * (1 - confidence);
+  } else {
+    // No historical data: pure linear extrapolation
+    projected = dailyAverage * totalDays;
+    margin = 0.15 * (1 - confidence);
+  }
+
   const lowerBound = projected * (1 - margin);
   const upperBound = projected * (1 + margin);
 
@@ -207,6 +260,6 @@ export function projectMonthlyRevenue(
     dailyAverage,
     accumulatedTotal,
     targetMet,
-    daysElapsed
+    daysElapsed,
   };
 }
