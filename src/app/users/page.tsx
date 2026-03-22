@@ -5,9 +5,7 @@ import {
   db,
   doc,
   getDocs,
-  getDoc,
   setDoc,
-  updateDoc,
   collection,
   Timestamp,
   createSecondaryApp,
@@ -46,8 +44,12 @@ export default function UsersPage() {
   const [saving, setSaving] = useState(false);
 
   // Edit
-  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingUser, setEditingUser] = useState<UserDoc | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editEmail, setEditEmail] = useState("");
+  const [editPassword, setEditPassword] = useState("");
   const [editRole, setEditRole] = useState<Role>("user");
+  const [editSaving, setEditSaving] = useState(false);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -114,15 +116,53 @@ export default function UsersPage() {
     }
   }
 
-  async function handleEditSave(uid: string) {
+  function resetEdit() {
+    setEditingUser(null);
+    setEditName("");
+    setEditEmail("");
+    setEditPassword("");
+    setEditRole("user");
+  }
+
+  async function handleEditSave() {
+    if (!editingUser) return;
+    if (!editName.trim() || !editEmail.trim()) {
+      setError("Nome e e-mail são obrigatórios.");
+      return;
+    }
+    if (editPassword && editPassword.length < 6) {
+      setError("A nova senha deve ter pelo menos 6 caracteres.");
+      return;
+    }
+    setEditSaving(true);
     setError(null);
     try {
-      await updateDoc(doc(db, "users", uid), { role: editRole });
-      setEditingId(null);
+      const token = await auth.currentUser?.getIdToken();
+      const body: Record<string, string> = {
+        name: editName.trim(),
+        email: editEmail.trim(),
+        role: editRole,
+      };
+      if (editPassword) body.password = editPassword;
+      const res = await fetch(`/api/users/${editingUser.uid}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error ?? "Erro desconhecido");
+      }
+      resetEdit();
       fetchUsers();
     } catch (e) {
       console.error(e);
-      setError("Erro ao atualizar usuário.");
+      setError(e instanceof Error ? e.message : "Erro ao atualizar usuário.");
+    } finally {
+      setEditSaving(false);
     }
   }
 
@@ -147,7 +187,10 @@ export default function UsersPage() {
   }
 
   function startEdit(u: UserDoc) {
-    setEditingId(u.uid);
+    setEditingUser(u);
+    setEditName(u.name);
+    setEditEmail(u.email);
+    setEditPassword("");
     setEditRole(u.role);
   }
 
@@ -182,6 +225,46 @@ export default function UsersPage() {
         >
           <AlertCircle className="w-4 h-4 shrink-0" style={{ color: "var(--accent-rose)" }} />
           <p className="text-sm" style={{ color: "var(--accent-rose)" }}>{error}</p>
+        </div>
+      )}
+
+      {/* Edit form */}
+      {editingUser && (
+        <div className="glass-card p-6 animate-in space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-sm">Editar Usuário</h2>
+            <button onClick={resetEdit} className="text-[var(--text-muted)] hover:text-[var(--text-primary)]">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1">Nome</label>
+              <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full" placeholder="Nome completo" />
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1">E-mail</label>
+              <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className="w-full" placeholder="usuario@empresa.com" />
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1">Nova senha <span className="text-[var(--text-muted)] opacity-60">(deixe em branco para manter)</span></label>
+              <input type="password" value={editPassword} onChange={(e) => setEditPassword(e.target.value)} className="w-full" placeholder="Mín. 6 caracteres" />
+            </div>
+            <div>
+              <label className="block text-xs text-[var(--text-muted)] mb-1">Perfil</label>
+              <select value={editRole} onChange={(e) => setEditRole(e.target.value as Role)} className="w-full">
+                {ROLES.map((r) => (
+                  <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button className="btn-primary flex items-center gap-2" onClick={handleEditSave} disabled={editSaving}>
+              <Check className="w-4 h-4" /> {editSaving ? "Salvando…" : "Salvar"}
+            </button>
+            <button className="btn-ghost" onClick={resetEdit}>Cancelar</button>
+          </div>
         </div>
       )}
 
@@ -251,56 +334,27 @@ export default function UsersPage() {
               </div>
 
               <div className="flex items-center gap-3">
-                {editingId === u.uid ? (
-                  <>
-                    <select
-                      value={editRole}
-                      onChange={(e) => setEditRole(e.target.value as Role)}
-                      className="text-xs"
-                    >
-                      {ROLES.map((r) => (
-                        <option key={r} value={r}>{ROLE_LABELS[r]}</option>
-                      ))}
-                    </select>
-                    <button
-                      onClick={() => handleEditSave(u.uid)}
-                      className="p-1.5 rounded-lg hover:bg-white/5 transition-all"
-                      style={{ color: "var(--accent-emerald)" }}
-                    >
-                      <Check className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => setEditingId(null)}
-                      className="p-1.5 rounded-lg hover:bg-white/5 transition-all text-[var(--text-muted)]"
-                    >
-                      <X className="w-4 h-4" />
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <span
-                      className="text-xs font-medium px-2 py-1 rounded-lg"
-                      style={{
-                        color: ROLE_COLORS[u.role],
-                        backgroundColor: `color-mix(in srgb, ${ROLE_COLORS[u.role]} 12%, transparent)`,
-                      }}
-                    >
-                      {ROLE_LABELS[u.role]}
-                    </span>
-                    <button
-                      onClick={() => startEdit(u)}
-                      className="p-2 rounded-lg text-[var(--text-muted)] hover:bg-white/5 hover:text-[var(--text-primary)] transition-all"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(u.uid, u.name)}
-                      className="p-2 rounded-lg text-[var(--text-muted)] hover:bg-[var(--accent-rose)]/10 hover:text-[var(--accent-rose)] transition-all"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </>
-                )}
+                <span
+                  className="text-xs font-medium px-2 py-1 rounded-lg"
+                  style={{
+                    color: ROLE_COLORS[u.role],
+                    backgroundColor: `color-mix(in srgb, ${ROLE_COLORS[u.role]} 12%, transparent)`,
+                  }}
+                >
+                  {ROLE_LABELS[u.role]}
+                </span>
+                <button
+                  onClick={() => startEdit(u)}
+                  className="p-2 rounded-lg text-[var(--text-muted)] hover:bg-white/5 hover:text-[var(--text-primary)] transition-all"
+                >
+                  <Pencil className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => handleDelete(u.uid, u.name)}
+                  className="p-2 rounded-lg text-[var(--text-muted)] hover:bg-[var(--accent-rose)]/10 hover:text-[var(--accent-rose)] transition-all"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
             </div>
           ))}
