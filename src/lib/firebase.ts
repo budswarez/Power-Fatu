@@ -1,6 +1,7 @@
 import { initializeApp, getApps } from "firebase/app";
 import {
   getFirestore,
+  initializeFirestore,
   collection,
   doc,
   getDocs,
@@ -22,8 +23,16 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-const db = getFirestore(app);
+let app;
+let db;
+
+if (getApps().length === 0) {
+  app = initializeApp(firebaseConfig);
+  db = initializeFirestore(app, { experimentalForceLongPolling: true });
+} else {
+  app = getApps()[0];
+  db = getFirestore(app);
+}
 
 export {
   db,
