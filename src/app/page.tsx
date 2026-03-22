@@ -160,7 +160,7 @@ export default function DashboardPage() {
   const projection = useMemo(() => {
     if (!channels.length) return null;
     const currRecords = toSalesRecords(currentSales, "current");
-    const histRecords = toSalesRecords(comparisonSales, "historical");
+    const histRecords = toSalesRecords(historicalSales, "historical");
     return computeConsolidatedProjection(
       channels,
       currRecords,
@@ -168,13 +168,13 @@ export default function DashboardPage() {
       currentMonthNum,
       currentYearNum
     );
-  }, [channels, currentSales, comparisonSales, currentMonthNum, currentYearNum]);
+  }, [channels, currentSales, historicalSales, currentMonthNum, currentYearNum]);
 
   // Detailed projection result (confidence, bounds, target tracking)
   const projResult = useMemo(() => {
     if (currentSales.length === 0) return null;
-    return projectMonthlyRevenue(currentSales, comparisonSales, target || undefined);
-  }, [currentSales, comparisonSales, target]);
+    return projectMonthlyRevenue(currentSales, historicalSales, target || undefined);
+  }, [currentSales, historicalSales, target]);
 
   const evolutionData = useMemo(() => {
     if (!channels.length) return [];
@@ -202,9 +202,11 @@ export default function DashboardPage() {
       points[d - 1].total_p = null;
     }
     if (lastDayTotal > 0 && lastDayTotal < totalDays && cumTotal > 0) {
-      const rate = cumTotal / lastDayTotal;
+      const projectedEnd = projection?.totalProjectedRevenue ?? (cumTotal / lastDayTotal * totalDays);
+      const daysRemaining = totalDays - lastDayTotal;
       for (let d = lastDayTotal; d <= totalDays; d++) {
-        points[d - 1].total_p = rate * d;
+        const t = daysRemaining > 0 ? (d - lastDayTotal) / daysRemaining : 1;
+        points[d - 1].total_p = cumTotal + t * (projectedEnd - cumTotal);
       }
     }
 
@@ -213,6 +215,7 @@ export default function DashboardPage() {
       const chSales = currentSales.filter(s => s.channel_id === ch.id);
       const dataDays = chSales.map(s => new Date(s.date).getDate());
       const lastDay = dataDays.length > 0 ? Math.max(...dataDays) : 0;
+      const projChannel = projection?.channels.find(c => c.channelId === ch.id);
 
       let cum = 0;
       for (let d = 1; d <= totalDays; d++) {
@@ -223,17 +226,19 @@ export default function DashboardPage() {
         points[d - 1][ch.id + "_p"] = null;
       }
 
-      // Linear projection from last data day onwards
+      // Interpolate from current cumulative to channel projected revenue
       if (lastDay > 0 && lastDay < totalDays && cum > 0) {
-        const dailyRate = cum / lastDay;
+        const projectedEnd = projChannel?.projectedRevenue ?? (cum / lastDay * totalDays);
+        const daysRemaining = totalDays - lastDay;
         for (let d = lastDay; d <= totalDays; d++) {
-          points[d - 1][ch.id + "_p"] = dailyRate * d;
+          const t = daysRemaining > 0 ? (d - lastDay) / daysRemaining : 1;
+          points[d - 1][ch.id + "_p"] = cum + t * (projectedEnd - cum);
         }
       }
     });
 
     return points;
-  }, [channels, currentSales, comparisonSales, currentMonthNum, currentYearNum]);
+  }, [channels, currentSales, comparisonSales, currentMonthNum, currentYearNum, projection]);
 
   // Day-by-day revenue per channel for the line chart
   const dailyChannelData = useMemo(() => {
@@ -427,42 +432,83 @@ export default function DashboardPage() {
       </div>
 
       {/* Target Progress */}
-      {target > 0 && projResult && (
-        <div className="glass-card p-6 animate-in delay-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold">Progresso vs Meta</p>
-            <p className="text-sm text-[var(--text-muted)]">
-              {pct(projResult.accumulatedTotal / target)} acumulado ·{" "}
-              {pct(projResult.confidence)} de confiança
-            </p>
+      {target > 0 && projResult && (() => {
+        const stillNeeded = Math.max(0, target - projResult.accumulatedTotal);
+        const daysLeft = projection ? projection.totalDays - currentDay : 0;
+        const dailyNeeded = daysLeft > 0 && stillNeeded > 0 ? stillNeeded / daysLeft : null;
+        const alreadyMet = projResult.accumulatedTotal >= target;
+        return (
+          <div className="glass-card p-6 animate-in delay-4">
+            <div className="flex items-center justify-between mb-3">
+              <p className="text-sm font-semibold">Progresso vs Meta</p>
+              <p className="text-sm text-[var(--text-muted)]">
+                {pct(projResult.accumulatedTotal / target)} acumulado ·{" "}
+                {pct(projResult.confidence)} de confiança
+              </p>
+            </div>
+            <div className="h-2.5 bg-[var(--bg-secondary)] rounded-full overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-1000"
+                style={{
+                  width: `${Math.min(100, (projResult.accumulatedTotal / target) * 100)}%`,
+                  background: "linear-gradient(90deg, var(--accent-emerald), var(--accent-blue))",
+                }}
+              />
+            </div>
+            <div className="flex justify-between mt-2 text-xs text-[var(--text-muted)]">
+              <span>Acumulado: {fmt(projResult.accumulatedTotal)}</span>
+              <span>Meta: {fmt(target)}</span>
+            </div>
+
+            {/* Daily pace needed */}
+            <div className="mt-4 grid grid-cols-3 gap-3">
+              <div className="rounded-xl p-3 text-center" style={{ backgroundColor: "var(--bg-secondary)" }}>
+                <p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-1">Dias restantes</p>
+                <p className="text-lg font-bold" style={{ color: daysLeft > 0 ? "var(--text-primary)" : "var(--text-muted)" }}>
+                  {daysLeft > 0 ? daysLeft : "—"}
+                </p>
+              </div>
+              <div className="rounded-xl p-3 text-center" style={{ backgroundColor: "var(--bg-secondary)" }}>
+                <p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-1">Falta acumular</p>
+                <p
+                  className="text-lg font-bold"
+                  style={{ color: alreadyMet ? "var(--accent-emerald)" : "var(--accent-rose)" }}
+                >
+                  {alreadyMet ? "✓ Meta batida" : fmt(stillNeeded)}
+                </p>
+              </div>
+              <div className="rounded-xl p-3 text-center" style={{ backgroundColor: "var(--bg-secondary)" }}>
+                <p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-1">Necessário/dia</p>
+                <p
+                  className="text-lg font-bold"
+                  style={{
+                    color: alreadyMet
+                      ? "var(--accent-emerald)"
+                      : dailyNeeded !== null
+                      ? "var(--accent-amber)"
+                      : "var(--text-muted)",
+                  }}
+                >
+                  {alreadyMet ? "—" : dailyNeeded !== null ? fmt(dailyNeeded) : "—"}
+                </p>
+              </div>
+            </div>
+
+            {projResult.targetMet !== undefined && (
+              <p
+                className="mt-3 text-sm font-medium"
+                style={{
+                  color: projResult.targetMet ? "var(--accent-emerald)" : "var(--accent-rose)",
+                }}
+              >
+                {projResult.targetMet
+                  ? "✓ Projeção indica que a meta será alcançada!"
+                  : `✗ Projeção indica ${fmt(target - projResult.projected)} abaixo da meta`}
+              </p>
+            )}
           </div>
-          <div className="h-2.5 bg-[var(--bg-secondary)] rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-1000"
-              style={{
-                width: `${Math.min(100, (projResult.accumulatedTotal / target) * 100)}%`,
-                background: "linear-gradient(90deg, var(--accent-emerald), var(--accent-blue))",
-              }}
-            />
-          </div>
-          <div className="flex justify-between mt-2 text-xs text-[var(--text-muted)]">
-            <span>Acumulado: {fmt(projResult.accumulatedTotal)}</span>
-            <span>Meta: {fmt(target)}</span>
-          </div>
-          {projResult.targetMet !== undefined && (
-            <p
-              className="mt-2 text-sm font-medium"
-              style={{
-                color: projResult.targetMet ? "var(--accent-emerald)" : "var(--accent-rose)",
-              }}
-            >
-              {projResult.targetMet
-                ? "✓ Projeção indica que a meta será alcançada!"
-                : `✗ Projeção indica ${fmt(target - projResult.projected)} abaixo da meta`}
-            </p>
-          )}
-        </div>
-      )}
+        );
+      })()}
 
       {/* Chart + Channel Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in delay-4">
@@ -534,15 +580,13 @@ export default function DashboardPage() {
                     return [fmt(Number(value) || 0), isProj ? `${chName} (proj.)` : chName];
                   }}
                   labelFormatter={(lbl) => `Dia ${lbl}`}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="hist"
-                  stroke="var(--text-muted)"
-                  strokeWidth={1.5}
-                  strokeDasharray="5 5"
-                  dot={false}
-                  connectNulls={false}
+                  itemSorter={(item) => {
+                    const key = item.dataKey as string;
+                    if (key === "total") return 0;
+                    if (key === "total_p") return 1;
+                    if (key === "hist") return 2;
+                    return 3;
+                  }}
                 />
                 <Line
                   type="monotone"
@@ -558,6 +602,15 @@ export default function DashboardPage() {
                   stroke="var(--accent-blue)"
                   strokeWidth={2}
                   strokeDasharray="4 4"
+                  dot={false}
+                  connectNulls={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="hist"
+                  stroke="var(--text-muted)"
+                  strokeWidth={1.5}
+                  strokeDasharray="5 5"
                   dot={false}
                   connectNulls={false}
                 />
