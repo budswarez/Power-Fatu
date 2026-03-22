@@ -18,19 +18,18 @@ export default function SetupPage() {
   const router = useRouter();
 
   useEffect(() => {
-    async function checkInitialized() {
-      try {
-        const snap = await getDoc(doc(db, "settings", "initialized"));
-        if (snap.exists()) {
-          router.replace("/login");
-          return;
-        }
-      } catch {
-        // Can't verify; show form anyway
-      }
-      setChecking(false);
-    }
-    checkInitialized();
+    let ignore = false;
+    getDoc(doc(db, "settings", "initialized"))
+      .then((snap) => {
+        if (ignore) return;
+        if (snap.exists()) router.replace("/login");
+        else setChecking(false);
+      })
+      .catch((err) => {
+        if (err?.name === "AbortError" || ignore) return;
+        setChecking(false); // mostra o form mesmo assim
+      });
+    return () => { ignore = true; };
   }, [router]);
 
   async function handleSubmit(e: React.FormEvent) {

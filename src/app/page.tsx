@@ -145,15 +145,9 @@ export default function DashboardPage() {
         try {
           const settingsSnap = await getDoc(doc(db, "settings", "global"));
           const firestoreTarget = settingsSnap.exists() ? settingsSnap.data().revenue_target : null;
-          if (firestoreTarget) {
-            setTarget(parseFloat(firestoreTarget));
-          } else {
-            const savedTarget = localStorage.getItem("revenue_target");
-            if (savedTarget) setTarget(parseFloat(savedTarget));
-          }
+          if (firestoreTarget) setTarget(parseFloat(firestoreTarget));
         } catch {
-          const savedTarget = localStorage.getItem("revenue_target");
-          if (savedTarget) setTarget(parseFloat(savedTarget));
+          // se falhar, meta fica em zero (sem fallback local)
         }
       } catch (e) {
         console.error(e);

@@ -22,20 +22,18 @@ export default function LoginPage() {
       router.replace("/");
       return;
     }
-    // Check if first-run setup is needed
-    async function checkSetup() {
-      try {
-        const snap = await getDoc(doc(db, "settings", "initialized"));
-        if (!snap.exists()) {
-          router.replace("/setup");
-          return;
-        }
-      } catch {
-        // If check fails, stay on login
-      }
-      setChecking(false);
-    }
-    checkSetup();
+    let ignore = false;
+    getDoc(doc(db, "settings", "initialized"))
+      .then((snap) => {
+        if (ignore) return;
+        if (!snap.exists()) router.replace("/setup");
+        else setChecking(false);
+      })
+      .catch((err) => {
+        if (err?.name === "AbortError" || ignore) return;
+        setChecking(false);
+      });
+    return () => { ignore = true; };
   }, [firebaseUser, router]);
 
   async function handleSubmit(e: React.FormEvent) {

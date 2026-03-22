@@ -22,9 +22,6 @@ export default function SettingsPage() {
         }
       } catch (e) {
         console.error(e);
-        // Fallback to localStorage if Firestore read fails
-        const t = localStorage.getItem("revenue_target");
-        if (t) setTarget(t);
       } finally {
         setLoading(false);
       }
@@ -37,11 +34,6 @@ export default function SettingsPage() {
     try {
       const val = target ? parseFloat(target) : null;
       await setDoc(SETTINGS_DOC, { revenue_target: val }, { merge: true });
-      if (val) {
-        localStorage.setItem("revenue_target", target);
-      } else {
-        localStorage.removeItem("revenue_target");
-      }
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);
     } catch (e) {
@@ -54,7 +46,6 @@ export default function SettingsPage() {
     setError(null);
     try {
       await setDoc(SETTINGS_DOC, { revenue_target: null }, { merge: true });
-      localStorage.removeItem("revenue_target");
       setTarget("");
       setSaved(true);
       setTimeout(() => setSaved(false), 2000);

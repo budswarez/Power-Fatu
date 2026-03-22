@@ -38,32 +38,50 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+    let currentUid: string | null = null;
+
+    const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
       setFirebaseUser(fbUser);
       if (!fbUser) {
+        currentUid = null;
         setUser(null);
         setLoading(false);
         return;
       }
-      try {
-        const snap = await getDoc(doc(db, "users", fbUser.uid));
-        if (snap.exists()) {
-          const data = snap.data();
-          setUser({
-            uid: fbUser.uid,
-            email: data.email ?? fbUser.email ?? "",
-            name: data.name ?? "",
-            role: data.role,
-          });
-        } else {
+
+      const uid = fbUser.uid;
+      currentUid = uid;
+
+      getDoc(doc(db, "users", uid))
+        .then((snap) => {
+          if (currentUid !== uid) return; // descarta resposta stale
+          if (snap.exists()) {
+            const data = snap.data();
+            setUser({
+              uid,
+              email: data.email ?? fbUser.email ?? "",
+              name: data.name ?? "",
+              role: data.role,
+            });
+          } else {
+            setUser(null);
+          }
+        })
+        .catch((err) => {
+          if (err?.name === "AbortError") return; // navegação cancelou o fetch — ignorar
+          if (currentUid !== uid) return;
           setUser(null);
-        }
-      } catch {
-        setUser(null);
-      }
-      setLoading(false);
+        })
+        .finally(() => {
+          if (currentUid !== uid) return;
+          setLoading(false);
+        });
     });
-    return unsubscribe;
+
+    return () => {
+      currentUid = null;
+      unsubscribe();
+    };
   }, []);
 
   async function signIn(email: string, password: string) {
