@@ -15,7 +15,7 @@ import {
 } from "@/lib/firebase";
 import type { SalesChannel, DailySale } from "@/lib/types";
 import { CalendarCheck2, Pencil, Plus, Trash2, AlertCircle } from "lucide-react";
-import { fmt, getChannelName, getChannelColor } from "@/lib/format";
+import { fmt, fmtCompact, getChannelName, getChannelColor } from "@/lib/format";
 
 export default function CurrentMonthPage() {
   const [channels, setChannels] = useState<SalesChannel[]>([]);
@@ -171,7 +171,7 @@ export default function CurrentMonthPage() {
       )}
 
       {/* Quick stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="glass-card p-4 kpi-emerald animate-in delay-1">
           <p className="text-xs text-[var(--text-muted)] uppercase tracking-wider mb-1">Faturado até hoje</p>
           <p className="text-lg font-bold text-[var(--accent-emerald)]">{fmt(totalMonth)}</p>
@@ -194,7 +194,7 @@ export default function CurrentMonthPage() {
       ) : (
         <div className="glass-card p-6 space-y-4 animate-in">
           <h2 className="font-semibold text-sm">{editingId ? "Editar Lançamento" : "Novo Lançamento"}</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
             <div>
               <label className="block text-xs text-[var(--text-muted)] mb-1">Canal</label>
               <select value={channelId} onChange={(e) => setChannelId(e.target.value)} className="w-full">
@@ -217,12 +217,12 @@ export default function CurrentMonthPage() {
             </div>
           </div>
           <div className="flex gap-3">
-            <button className="btn-primary flex items-center gap-2" onClick={handleSave} disabled={saving}>
+            <button className="btn-primary flex items-center justify-center gap-2 flex-1 sm:flex-none" onClick={handleSave} disabled={saving}>
               {editingId ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
               {editingId ? "Atualizar" : "Adicionar"}
             </button>
             {editingId && (
-              <button className="btn-ghost" onClick={resetForm}>Cancelar</button>
+              <button className="btn-ghost flex-1 sm:flex-none" onClick={resetForm}>Cancelar</button>
             )}
           </div>
         </div>
@@ -237,14 +237,15 @@ export default function CurrentMonthPage() {
         </div>
       ) : (
         <div className="glass-card overflow-hidden">
+          <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--border-subtle)] text-left text-[var(--text-muted)]">
-                <th className="px-5 py-3 font-medium">Data</th>
-                <th className="px-5 py-3 font-medium">Canal</th>
-                <th className="px-5 py-3 font-medium text-right">Faturamento</th>
-                <th className="px-5 py-3 font-medium text-right">Pedidos</th>
-                <th className="px-5 py-3 font-medium text-right">Ações</th>
+                <th className="px-3 py-2.5 sm:px-5 sm:py-3 font-medium">Data</th>
+                <th className="px-3 py-2.5 sm:px-5 sm:py-3 font-medium">Canal</th>
+                <th className="px-3 py-2.5 sm:px-5 sm:py-3 font-medium text-right">Faturamento</th>
+                <th className="hidden sm:table-cell px-5 py-3 font-medium text-right">Pedidos</th>
+                <th className="px-3 py-2.5 sm:px-5 sm:py-3 font-medium text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
@@ -252,18 +253,21 @@ export default function CurrentMonthPage() {
                 const d = new Date(s.date);
                 return (
                   <tr key={s.id} className="border-b border-[var(--border-subtle)]/50 hover:bg-white/[0.02] transition-colors">
-                    <td className="px-5 py-3">
+                    <td className="px-3 py-2.5 sm:px-5 sm:py-3 tabular-nums">
                       {String(d.getDate()).padStart(2, "0")}/{String(d.getMonth() + 1).padStart(2, "0")}
                     </td>
-                    <td className="px-5 py-3">
-                      <span className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: getChannelColor(channels, s.channel_id) }} />
-                        {getChannelName(channels, s.channel_id)}
+                    <td className="px-3 py-2.5 sm:px-5 sm:py-3 max-w-[100px] sm:max-w-none">
+                      <span className="flex items-center gap-1.5 sm:gap-2">
+                        <span className="w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0" style={{ backgroundColor: getChannelColor(channels, s.channel_id) }} />
+                        <span className="truncate">{getChannelName(channels, s.channel_id)}</span>
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-right font-medium">{fmt(s.amount)}</td>
-                    <td className="px-5 py-3 text-right text-[var(--text-secondary)]">{s.order_count ?? "—"}</td>
-                    <td className="px-5 py-3 text-right">
+                    <td className="px-3 py-2.5 sm:px-5 sm:py-3 text-right font-medium tabular-nums">
+                      <span className="sm:hidden">{fmtCompact(s.amount)}</span>
+                      <span className="hidden sm:inline">{fmt(s.amount)}</span>
+                    </td>
+                    <td className="hidden sm:table-cell px-5 py-3 text-right text-[var(--text-secondary)]">{s.order_count ?? "—"}</td>
+                    <td className="px-3 py-2.5 sm:px-5 sm:py-3 text-right">
                       <button onClick={() => startEdit(s)} className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/5 transition-all mr-1">
                         <Pencil className="w-3.5 h-3.5" />
                       </button>
@@ -276,6 +280,7 @@ export default function CurrentMonthPage() {
               })}
             </tbody>
           </table>
+          </div>
         </div>
       )}
     </div>

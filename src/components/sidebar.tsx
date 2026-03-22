@@ -40,7 +40,12 @@ const ROLE_LABELS: Record<Role, string> = {
   admin: "Admin",
 };
 
-export function Sidebar() {
+interface SidebarProps {
+  open?: boolean;
+  onClose?: () => void;
+}
+
+export function Sidebar({ open = false, onClose }: SidebarProps) {
   const pathname = usePathname();
   const router = useRouter();
   const { user, signOut } = useAuth();
@@ -50,12 +55,15 @@ export function Sidebar() {
   const visibleFooter = FOOTER_ITEMS.filter((i) => i.roles.includes(role));
 
   async function handleSignOut() {
+    onClose?.();
     await signOut();
     router.replace("/login");
   }
 
   return (
-    <aside className="fixed top-0 left-0 h-screen w-[260px] flex flex-col border-r border-[var(--border-subtle)] bg-[var(--bg-secondary)]">
+    <aside
+      className={`fixed top-0 left-0 h-screen w-[260px] flex flex-col border-r border-[var(--border-subtle)] bg-[var(--bg-secondary)] z-40 transition-transform duration-300 ease-in-out ${open ? "translate-x-0" : "-translate-x-full"} md:translate-x-0`}
+    >
       {/* Logo */}
       <div className="px-6 py-5 flex items-center gap-3">
         <div className="w-9 h-9 rounded-xl bg-[var(--accent-blue)] flex items-center justify-center">
@@ -86,6 +94,7 @@ export function Sidebar() {
           <Link
             key={href}
             href={href}
+            onClick={onClose}
             className={`sidebar-link ${pathname === href ? "active" : ""}`}
           >
             <Icon className="w-[18px] h-[18px]" />
@@ -100,6 +109,7 @@ export function Sidebar() {
           <Link
             key={href}
             href={href}
+            onClick={onClose}
             className={`sidebar-link ${pathname === href ? "active" : ""}`}
           >
             <Icon className="w-[18px] h-[18px]" />

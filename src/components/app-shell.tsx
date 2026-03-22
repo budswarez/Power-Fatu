@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import { Menu, TrendingUp } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { Sidebar } from "@/components/sidebar";
 import type { Role } from "@/lib/types";
@@ -30,6 +31,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
   const isPublic = PUBLIC_ROUTES.includes(pathname);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Close drawer on route change
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [pathname]);
 
   useEffect(() => {
     if (loading) return;
@@ -81,8 +88,38 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <>
-      <Sidebar />
-      <main className="flex-1 ml-[260px] p-8 overflow-auto">{children}</main>
+      {/* Mobile backdrop */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 bg-black/60 z-30 md:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+
+      <div className="flex-1 flex flex-col md:ml-[260px]">
+        {/* Mobile top header */}
+        <header className="md:hidden sticky top-0 z-20 flex items-center justify-between px-4 py-3 bg-[var(--bg-secondary)] border-b border-[var(--border-subtle)]">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            className="p-2 -ml-1 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all"
+            aria-label="Abrir menu"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-[var(--accent-blue)] flex items-center justify-center">
+              <TrendingUp className="w-4 h-4 text-white" />
+            </div>
+            <span className="text-sm font-bold">PFatu</span>
+          </div>
+          {/* Spacer to keep logo centered */}
+          <div className="w-9" />
+        </header>
+
+        <main className="flex-1 p-4 md:p-8 overflow-auto">{children}</main>
+      </div>
     </>
   );
 }

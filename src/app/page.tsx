@@ -465,7 +465,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Daily pace needed */}
-            <div className="mt-4 grid grid-cols-3 gap-3">
+            <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-3">
               <div className="rounded-xl p-3 text-center" style={{ backgroundColor: "var(--bg-secondary)" }}>
                 <p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-1">Dias restantes</p>
                 <p className="text-lg font-bold" style={{ color: daysLeft > 0 ? "var(--text-primary)" : "var(--text-muted)" }}>
