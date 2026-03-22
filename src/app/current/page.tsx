@@ -14,12 +14,14 @@ import {
   Timestamp,
 } from "@/lib/firebase";
 import type { SalesChannel, DailySale } from "@/lib/types";
-import { CalendarCheck2, Pencil, Plus, Trash2 } from "lucide-react";
+import { CalendarCheck2, Pencil, Plus, Trash2, AlertCircle } from "lucide-react";
+import { fmt, getChannelName, getChannelColor } from "@/lib/format";
 
 export default function CurrentMonthPage() {
   const [channels, setChannels] = useState<SalesChannel[]>([]);
   const [sales, setSales] = useState<DailySale[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const currentMonth = (() => {
     const d = new Date();
@@ -38,6 +40,7 @@ export default function CurrentMonthPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const now = new Date();
       const startDate = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -49,7 +52,6 @@ export default function CurrentMonthPage() {
         ...d.data(),
       })) as SalesChannel[];
       setChannels(chList.sort((a, b) => a.name.localeCompare(b.name)));
-      if (!channelId && chList.length > 0) setChannelId(chList[0].id);
 
       const salesQ = query(
         collection(db, "sales"),
@@ -65,29 +67,31 @@ export default function CurrentMonthPage() {
       setSales(sList.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
     } catch (e) {
       console.error(e);
+      setError("Erro ao carregar dados. Verifique sua conexão e recarregue a página.");
     }
     setLoading(false);
-  }, [channelId]);
+  }, []);
+
+  // Initialize default channel separately to avoid fetchData re-triggering
+  useEffect(() => {
+    if (channels.length > 0 && !channelId) setChannelId(channels[0].id);
+  }, [channels, channelId]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  function getChannelName(id: string) {
-    return channels.find((c) => c.id === id)?.name ?? "—";
-  }
-  function getChannelColor(id: string) {
-    return channels.find((c) => c.id === id)?.color ?? "#666";
-  }
 
   async function handleSave() {
-    if (!channelId || !date || !amount) return;
+    const parsedAmount = parseFloat(amount);
+    if (!channelId || !date || !amount || isNaN(parsedAmount) || parsedAmount <= 0) return;
     setSaving(true);
+    setError(null);
     try {
       const payload = {
         channel_id: channelId,
         date: Timestamp.fromDate(new Date(date + "T12:00:00")),
-        amount: parseFloat(amount),
+        amount: parsedAmount,
         order_count: orderCount ? parseInt(orderCount) : null,
       };
       if (editingId) {
@@ -99,17 +103,20 @@ export default function CurrentMonthPage() {
       fetchData();
     } catch (e) {
       console.error(e);
+      setError("Erro ao salvar lançamento. Tente novamente.");
     }
     setSaving(false);
   }
 
   async function handleDelete(id: string) {
     if (!confirm("Excluir este lançamento?")) return;
+    setError(null);
     try {
       await deleteDoc(doc(db, "sales", id));
       fetchData();
     } catch (e) {
       console.error(e);
+      setError("Erro ao excluir lançamento. Tente novamente.");
     }
   }
 
@@ -130,9 +137,6 @@ export default function CurrentMonthPage() {
     setOrderCount("");
   }
 
-  const fmt = (v: number) =>
-    v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-
   const totalMonth = sales.reduce((s, e) => s + e.amount, 0);
   const totalOrders = sales.reduce((s, e) => s + (e.order_count ?? 0), 0);
   const daysWithData = new Set(sales.map((s) => new Date(s.date).getDate())).size;
@@ -151,6 +155,20 @@ export default function CurrentMonthPage() {
           </p>
         </div>
       </div>
+
+      {/* Error banner */}
+      {error && (
+        <div
+          className="glass-card p-3 flex items-center gap-2 border"
+          style={{
+            background: "color-mix(in srgb, var(--accent-rose) 6%, transparent)",
+            borderColor: "color-mix(in srgb, var(--accent-rose) 30%, transparent)",
+          }}
+        >
+          <AlertCircle className="w-4 h-4 shrink-0" style={{ color: "var(--accent-rose)" }} />
+          <p className="text-sm" style={{ color: "var(--accent-rose)" }}>{error}</p>
+        </div>
+      )}
 
       {/* Quick stats */}
       <div className="grid grid-cols-3 gap-4">
@@ -191,7 +209,7 @@ export default function CurrentMonthPage() {
             </div>
             <div>
               <label className="block text-xs text-[var(--text-muted)] mb-1">Faturamento (R$)</label>
-              <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full" />
+              <input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full" />
             </div>
             <div>
               <label className="block text-xs text-[var(--text-muted)] mb-1">Pedidos (opc.)</label>
@@ -239,8 +257,8 @@ export default function CurrentMonthPage() {
                     </td>
                     <td className="px-5 py-3">
                       <span className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: getChannelColor(s.channel_id) }} />
-                        {getChannelName(s.channel_id)}
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: getChannelColor(channels, s.channel_id) }} />
+                        {getChannelName(channels, s.channel_id)}
                       </span>
                     </td>
                     <td className="px-5 py-3 text-right font-medium">{fmt(s.amount)}</td>

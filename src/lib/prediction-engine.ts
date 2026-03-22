@@ -3,7 +3,6 @@ import type {
   SalesRecord,
   ChannelProjection,
   ConsolidatedProjection,
-  DailyChartPoint,
   DailySale,
 } from "./types";
 
@@ -131,52 +130,6 @@ export function computeConsolidatedProjection(
   };
 }
 
-/** Build daily cumulative chart data */
-export function buildDailyChartData(
-  currentSales: SalesRecord[],
-  historicalSales: SalesRecord[],
-  totalDays: number
-): DailyChartPoint[] {
-  const points: DailyChartPoint[] = [];
-  let cumulativeCurrent = 0;
-  let cumulativeHistorical = 0;
-
-  for (let d = 1; d <= totalDays; d++) {
-    const dayCurrent = currentSales
-      .filter((s) => s.day === d)
-      .reduce((sum, s) => sum + s.revenue, 0);
-    const dayHistorical = historicalSales
-      .filter((s) => s.day === d)
-      .reduce((sum, s) => sum + s.revenue, 0);
-
-    cumulativeCurrent += dayCurrent;
-    cumulativeHistorical += dayHistorical;
-
-    points.push({
-      day: d,
-      historical: cumulativeHistorical,
-      current: cumulativeCurrent,
-      projected: null,
-    });
-  }
-
-  // Fill projected line: from last actual day, extrapolate linearly
-  const lastActualDay = Math.max(
-    0,
-    ...currentSales.map((s) => s.day)
-  );
-  if (lastActualDay > 0 && lastActualDay < totalDays) {
-    const rate = cumulativeCurrent / lastActualDay;
-    for (let d = lastActualDay; d <= totalDays; d++) {
-      const idx = d - 1;
-      if (points[idx]) {
-        points[idx].projected = rate * d;
-      }
-    }
-  }
-
-  return points;
-}
 
 export interface ProjectionResult {
   projected: number;

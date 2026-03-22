@@ -1,18 +1,20 @@
-import { initializeApp, getApps, FirebaseApp } from "firebase/app";
+import { initializeApp, getApps, getApp, deleteApp, type FirebaseApp } from "firebase/app";
+import { getAuth } from "firebase/auth";
 import {
   getFirestore,
   initializeFirestore,
   collection,
   doc,
   getDocs,
+  getDoc,
+  setDoc,
   addDoc,
   updateDoc,
   deleteDoc,
   query,
   where,
-  orderBy,
   Timestamp,
-  Firestore,
+  type Firestore,
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -27,24 +29,35 @@ const firebaseConfig = {
 let app: FirebaseApp;
 let db: Firestore;
 
-if (getApps().length === 0) {
+if (getApps().find((a) => a.name === "[DEFAULT]")) {
+  app = getApp();
+  db = getFirestore(app);
+} else {
   app = initializeApp(firebaseConfig);
   db = initializeFirestore(app, { experimentalForceLongPolling: true });
-} else {
-  app = getApps()[0];
-  db = getFirestore(app);
+}
+
+const auth = getAuth(app);
+
+/** Creates a temporary secondary Firebase app for user creation without disrupting the admin session. Call deleteApp(result) when done. */
+function createSecondaryApp(): FirebaseApp {
+  return initializeApp(firebaseConfig, `secondary-${Date.now()}`);
 }
 
 export {
   db,
+  auth,
+  deleteApp,
+  createSecondaryApp,
   collection,
   doc,
   getDocs,
+  getDoc,
+  setDoc,
   addDoc,
   updateDoc,
   deleteDoc,
   query,
   where,
-  orderBy,
   Timestamp,
 };

@@ -12,7 +12,7 @@ import {
   Timestamp,
 } from "@/lib/firebase";
 import type { SalesChannel } from "@/lib/types";
-import { Layers, Plus, Trash2, Pencil, X, Check } from "lucide-react";
+import { Layers, Plus, Trash2, Pencil, X, Check, AlertCircle } from "lucide-react";
 
 const PRESET_COLORS = [
   "#3b82f6", "#10b981", "#f59e0b", "#f43f5e", "#8b5cf6",
@@ -22,6 +22,7 @@ const PRESET_COLORS = [
 export default function ChannelsPage() {
   const [channels, setChannels] = useState<SalesChannel[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
@@ -29,6 +30,7 @@ export default function ChannelsPage() {
 
   async function fetchChannels() {
     setLoading(true);
+    setError(null);
     try {
       const snap = await getDocs(collection(db, "channels"));
       const list: SalesChannel[] = snap.docs.map((d) => ({
@@ -39,6 +41,7 @@ export default function ChannelsPage() {
       setChannels(list.sort((a, b) => a.name.localeCompare(b.name)));
     } catch (e) {
       console.error(e);
+      setError("Erro ao carregar canais. Verifique sua conexão e recarregue a página.");
     }
     setLoading(false);
   }
@@ -49,6 +52,7 @@ export default function ChannelsPage() {
 
   async function handleSave() {
     if (!name.trim()) return;
+    setError(null);
     try {
       if (editingId) {
         await updateDoc(doc(db, "channels", editingId), { name, color });
@@ -63,16 +67,19 @@ export default function ChannelsPage() {
       fetchChannels();
     } catch (e) {
       console.error(e);
+      setError("Erro ao salvar canal. Tente novamente.");
     }
   }
 
   async function handleDelete(id: string) {
     if (!confirm("Excluir este canal? As vendas associadas NÃO serão removidas.")) return;
+    setError(null);
     try {
       await deleteDoc(doc(db, "channels", id));
       fetchChannels();
     } catch (e) {
       console.error(e);
+      setError("Erro ao excluir canal. Tente novamente.");
     }
   }
 
@@ -111,6 +118,20 @@ export default function ChannelsPage() {
           </button>
         )}
       </div>
+
+      {/* Error banner */}
+      {error && (
+        <div
+          className="glass-card p-3 flex items-center gap-2 border"
+          style={{
+            background: "color-mix(in srgb, var(--accent-rose) 6%, transparent)",
+            borderColor: "color-mix(in srgb, var(--accent-rose) 30%, transparent)",
+          }}
+        >
+          <AlertCircle className="w-4 h-4 shrink-0" style={{ color: "var(--accent-rose)" }} />
+          <p className="text-sm" style={{ color: "var(--accent-rose)" }}>{error}</p>
+        </div>
+      )}
 
       {/* Form */}
       {showForm && (

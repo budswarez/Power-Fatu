@@ -1,32 +1,67 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Settings2, Save, Trash2 } from "lucide-react";
+import { Settings2, Save, Trash2, AlertCircle } from "lucide-react";
+import { db, doc, getDoc, setDoc } from "@/lib/firebase";
+
+const SETTINGS_DOC = doc(db, "settings", "global");
 
 export default function SettingsPage() {
   const [target, setTarget] = useState("");
   const [saved, setSaved] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const t = localStorage.getItem("revenue_target");
-    if (t) setTarget(t);
+    async function loadTarget() {
+      try {
+        const snap = await getDoc(SETTINGS_DOC);
+        if (snap.exists()) {
+          const val = snap.data().revenue_target;
+          if (val) setTarget(String(val));
+        }
+      } catch (e) {
+        console.error(e);
+        // Fallback to localStorage if Firestore read fails
+        const t = localStorage.getItem("revenue_target");
+        if (t) setTarget(t);
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadTarget();
   }, []);
 
-  function handleSave() {
-    if (target) {
-      localStorage.setItem("revenue_target", target);
-    } else {
-      localStorage.removeItem("revenue_target");
+  async function handleSave() {
+    setError(null);
+    try {
+      const val = target ? parseFloat(target) : null;
+      await setDoc(SETTINGS_DOC, { revenue_target: val }, { merge: true });
+      if (val) {
+        localStorage.setItem("revenue_target", target);
+      } else {
+        localStorage.removeItem("revenue_target");
+      }
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      console.error(e);
+      setError("Erro ao salvar configuração. Tente novamente.");
     }
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
   }
 
-  function handleClear() {
-    localStorage.removeItem("revenue_target");
-    setTarget("");
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  async function handleClear() {
+    setError(null);
+    try {
+      await setDoc(SETTINGS_DOC, { revenue_target: null }, { merge: true });
+      localStorage.removeItem("revenue_target");
+      setTarget("");
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch (e) {
+      console.error(e);
+      setError("Erro ao limpar configuração. Tente novamente.");
+    }
   }
 
   return (
@@ -44,6 +79,20 @@ export default function SettingsPage() {
         </div>
       </div>
 
+      {/* Error banner */}
+      {error && (
+        <div
+          className="glass-card p-3 flex items-center gap-2 border"
+          style={{
+            background: "color-mix(in srgb, var(--accent-rose) 6%, transparent)",
+            borderColor: "color-mix(in srgb, var(--accent-rose) 30%, transparent)",
+          }}
+        >
+          <AlertCircle className="w-4 h-4 shrink-0" style={{ color: "var(--accent-rose)" }} />
+          <p className="text-sm" style={{ color: "var(--accent-rose)" }}>{error}</p>
+        </div>
+      )}
+
       {/* Target */}
       <div className="glass-card p-6 space-y-4 animate-in">
         <h2 className="font-semibold text-sm">Meta de Faturamento Mensal</h2>
@@ -60,12 +109,13 @@ export default function SettingsPage() {
               value={target}
               onChange={(e) => setTarget(e.target.value)}
               className="w-full"
+              disabled={loading}
             />
           </div>
-          <button className="btn-primary flex items-center gap-2 h-10" onClick={handleSave}>
+          <button className="btn-primary flex items-center gap-2 h-10" onClick={handleSave} disabled={loading}>
             <Save className="w-4 h-4" /> Salvar
           </button>
-          <button className="btn-ghost flex items-center gap-2 h-10" onClick={handleClear}>
+          <button className="btn-ghost flex items-center gap-2 h-10" onClick={handleClear} disabled={loading}>
             <Trash2 className="w-4 h-4" /> Limpar
           </button>
         </div>
@@ -89,8 +139,8 @@ export default function SettingsPage() {
           </p>
           <p>
             <strong className="text-[var(--text-secondary)]">Intervalo:</strong> os limites inferior e
-            superior representam uma margem de ±15% sobre a projeção central, ajustada pelo desvio padrão
-            dos dados históricos.
+            superior representam uma margem de ±10–15% sobre a projeção central, ajustada conforme o
+            grau de confiança da projeção.
           </p>
         </div>
       </div>

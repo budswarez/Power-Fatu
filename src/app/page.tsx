@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
-import { db, collection, getDocs, query, where, Timestamp } from "@/lib/firebase";
+import { db, collection, getDocs, query, where, Timestamp, doc, getDoc } from "@/lib/firebase";
 import type { SalesChannel, DailySale, SalesRecord } from "@/lib/types";
 import {
   computeConsolidatedProjection,
   projectMonthlyRevenue,
 } from "@/lib/prediction-engine";
+import { fmt } from "@/lib/format";
 import { TrendingUp, Activity, BarChart3, LayoutDashboard, Gauge } from "lucide-react";
 import {
   LineChart,
@@ -141,8 +142,19 @@ export default function DashboardPage() {
         setHistoricalSales(mapSales(histSnap));
         setPrevYearSales(mapSales(prevYearSnap));
 
-        const savedTarget = localStorage.getItem("revenue_target");
-        if (savedTarget) setTarget(parseFloat(savedTarget));
+        try {
+          const settingsSnap = await getDoc(doc(db, "settings", "global"));
+          const firestoreTarget = settingsSnap.exists() ? settingsSnap.data().revenue_target : null;
+          if (firestoreTarget) {
+            setTarget(parseFloat(firestoreTarget));
+          } else {
+            const savedTarget = localStorage.getItem("revenue_target");
+            if (savedTarget) setTarget(parseFloat(savedTarget));
+          }
+        } catch {
+          const savedTarget = localStorage.getItem("revenue_target");
+          if (savedTarget) setTarget(parseFloat(savedTarget));
+        }
       } catch (e) {
         console.error(e);
       }
@@ -265,8 +277,6 @@ export default function DashboardPage() {
     .reduce((sum, s) => sum + s.amount, 0);
   const comparisonFullMonth = comparisonSales.reduce((sum, s) => sum + s.amount, 0);
 
-  const fmt = (v: number) =>
-    v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   const pct = (v: number) => `${(v * 100).toFixed(1)}%`;
 

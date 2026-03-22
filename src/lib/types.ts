@@ -55,9 +55,13 @@ export interface ConsolidatedProjection {
   seasonalWeight: number;
 }
 
-export interface DailyChartPoint {
-  day: number;
-  historical: number;
-  current: number;
-  projected: number | null;
+// ─── Auth & RBAC ──────────────────────────────────────────────────────────────
+
+export type Role = "user" | "gerente" | "admin";
+
+export interface UserProfile {
+  uid: string;
+  email: string;
+  name: string;
+  role: Role;
 }

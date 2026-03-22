@@ -25,6 +25,7 @@ import {
   CheckCircle,
   AlertCircle,
 } from "lucide-react";
+import { fmt, getChannelName, getChannelColor } from "@/lib/format";
 
 type ParsedRow = {
   channel_id: string;
@@ -38,6 +39,7 @@ export default function HistoricalPage() {
   const [channels, setChannels] = useState<SalesChannel[]>([]);
   const [sales, setSales] = useState<DailySale[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState(() => {
     const d = new Date();
     d.setMonth(d.getMonth() - 1);
@@ -60,6 +62,7 @@ export default function HistoricalPage() {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       const [year, month] = selectedMonth.split("-").map(Number);
       const startDate = new Date(year, month - 1, 1);
@@ -71,7 +74,6 @@ export default function HistoricalPage() {
         ...d.data(),
       })) as SalesChannel[];
       setChannels(chList.sort((a, b) => a.name.localeCompare(b.name)));
-      if (!channelId && chList.length > 0) setChannelId(chList[0].id);
 
       const salesQ = query(
         collection(db, "sales"),
@@ -87,29 +89,31 @@ export default function HistoricalPage() {
       setSales(sList.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
     } catch (e) {
       console.error(e);
+      setError("Erro ao carregar dados. Verifique sua conexão e recarregue a página.");
     }
     setLoading(false);
-  }, [selectedMonth, channelId]);
+  }, [selectedMonth]);
+
+  // Initialize default channel separately to avoid fetchData re-triggering
+  useEffect(() => {
+    if (channels.length > 0 && !channelId) setChannelId(channels[0].id);
+  }, [channels, channelId]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  function getChannelName(id: string) {
-    return channels.find((c) => c.id === id)?.name ?? "—";
-  }
-  function getChannelColor(id: string) {
-    return channels.find((c) => c.id === id)?.color ?? "#666";
-  }
 
   async function handleSave() {
-    if (!channelId || !date || !amount) return;
+    const parsedAmount = parseFloat(amount);
+    if (!channelId || !date || !amount || isNaN(parsedAmount) || parsedAmount <= 0) return;
     setSaving(true);
+    setError(null);
     try {
       const payload = {
         channel_id: channelId,
         date: Timestamp.fromDate(new Date(date + "T12:00:00")),
-        amount: parseFloat(amount),
+        amount: parsedAmount,
         order_count: orderCount ? parseInt(orderCount) : null,
       };
       if (editingId) {
@@ -121,17 +125,20 @@ export default function HistoricalPage() {
       fetchData();
     } catch (e) {
       console.error(e);
+      setError("Erro ao salvar lançamento. Tente novamente.");
     }
     setSaving(false);
   }
 
   async function handleDelete(id: string) {
     if (!confirm("Excluir este lançamento?")) return;
+    setError(null);
     try {
       await deleteDoc(doc(db, "sales", id));
       fetchData();
     } catch (e) {
       console.error(e);
+      setError("Erro ao excluir lançamento. Tente novamente.");
     }
   }
 
@@ -167,7 +174,7 @@ export default function HistoricalPage() {
     chNames.forEach((name, ci) => {
       exampleDays.forEach((day, di) => {
         const d = new Date(year, month - 1, day);
-        if (d.getMonth() !== month - 1) return; // skip invalid dates
+        if (d.getMonth() !== month - 1) return;
         const dateStr = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
         const amt     = (baseAmounts[di] + ci * 40000).toFixed(2);
         const orders  = baseOrders[di]  + ci * 30;
@@ -249,6 +256,7 @@ export default function HistoricalPage() {
   async function handleImport() {
     if (!csvPreview || csvPreview.valid.length === 0) return;
     setImporting(true);
+    setError(null);
     let imported = 0;
     let updated = 0;
     try {
@@ -258,7 +266,6 @@ export default function HistoricalPage() {
         const dayEnd = new Date(row.date);
         dayEnd.setHours(23, 59, 59, 999);
 
-        // Check for existing record on same channel + same day
         const existingSnap = await getDocs(
           query(
             collection(db, "sales"),
@@ -283,14 +290,16 @@ export default function HistoricalPage() {
           imported++;
         }
       }
-      setImportResult({ imported, updated, skipped: csvPreview.errors.length });
       setCsvFile(null);
       setCsvPreview(null);
       fetchData();
     } catch (e) {
       console.error(e);
+      setError(`Importação interrompida. ${imported + updated} de ${csvPreview.valid.length} registros processados.`);
+    } finally {
+      setImportResult({ imported, updated, skipped: csvPreview?.errors.length ?? 0 });
+      setImporting(false);
     }
-    setImporting(false);
   }
 
   function resetCsv() {
@@ -298,9 +307,6 @@ export default function HistoricalPage() {
     setCsvPreview(null);
     setImportResult(null);
   }
-
-  const fmt = (v: number) =>
-    v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
@@ -316,6 +322,20 @@ export default function HistoricalPage() {
           </p>
         </div>
       </div>
+
+      {/* Error banner */}
+      {error && (
+        <div
+          className="glass-card p-3 flex items-center gap-2 border"
+          style={{
+            background: "color-mix(in srgb, var(--accent-rose) 6%, transparent)",
+            borderColor: "color-mix(in srgb, var(--accent-rose) 30%, transparent)",
+          }}
+        >
+          <AlertCircle className="w-4 h-4 shrink-0" style={{ color: "var(--accent-rose)" }} />
+          <p className="text-sm" style={{ color: "var(--accent-rose)" }}>{error}</p>
+        </div>
+      )}
 
       {/* Month selector */}
       <div className="glass-card p-4 flex items-center gap-4">
@@ -419,9 +439,7 @@ export default function HistoricalPage() {
                       <tbody>
                         {csvPreview.valid.slice(0, 3).map((r, i) => (
                           <tr key={i} className="border-b border-[var(--border-subtle)]/50">
-                            <td className="px-3 py-2">
-                              {r.date.toLocaleDateString("pt-BR")}
-                            </td>
+                            <td className="px-3 py-2">{r.date.toLocaleDateString("pt-BR")}</td>
                             <td className="px-3 py-2">{r.channelName}</td>
                             <td className="px-3 py-2 text-right">{fmt(r.amount)}</td>
                             <td className="px-3 py-2 text-right text-[var(--text-muted)]">
@@ -499,7 +517,7 @@ export default function HistoricalPage() {
               </div>
               <div>
                 <label className="block text-xs text-[var(--text-muted)] mb-1">Faturamento (R$)</label>
-                <input type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full" />
+                <input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full" />
               </div>
               <div>
                 <label className="block text-xs text-[var(--text-muted)] mb-1">Pedidos (opc.)</label>
@@ -549,8 +567,8 @@ export default function HistoricalPage() {
                     </td>
                     <td className="px-5 py-3">
                       <span className="flex items-center gap-2">
-                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: getChannelColor(s.channel_id) }} />
-                        {getChannelName(s.channel_id)}
+                        <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: getChannelColor(channels, s.channel_id) }} />
+                        {getChannelName(channels, s.channel_id)}
                       </span>
                     </td>
                     <td className="px-5 py-3 text-right font-medium">{fmt(s.amount)}</td>
