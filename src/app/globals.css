@@ -19,6 +19,57 @@
   --glass-border: rgba(255, 255, 255, 0.06);
 }
 
+/* ── Light mode tokens ────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg-primary:    #f0f2f7;
+  --bg-secondary:  #e4e8f0;
+  --bg-card:       #ffffff;
+  --bg-card-hover: #f8fafc;
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --text-primary:  #111827;
+  --text-secondary:#374151;
+  --text-muted:    #6b7280;
+  --accent-blue:   #2563eb;
+  --accent-emerald:#059669;
+  --accent-amber:  #d97706;
+  --accent-rose:   #e11d48;
+  --accent-violet: #7c3aed;
+  --accent-purple: #7c3aed;
+  --glass:         rgba(255, 255, 255, 0.7);
+  --glass-border:  rgba(0, 0, 0, 0.06);
+}
+
+[data-theme="light"] body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+[data-theme="light"] .sidebar-link:hover {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+[data-theme="light"] .sidebar-link.active {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+[data-theme="light"] input:-webkit-autofill,
+[data-theme="light"] input:-webkit-autofill:hover,
+[data-theme="light"] input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 30px #e4e8f0 inset !important;
+  -webkit-text-fill-color: #111827 !important;
+  caret-color: #111827;
+}
+
+[data-theme="light"] input[type="password"],
+[data-theme="light"] input[type="text"],
+[data-theme="light"] input[type="number"],
+[data-theme="light"] input[type="email"],
+[data-theme="light"] input[type="date"],
+[data-theme="light"] input[type="month"],
+[data-theme="light"] select {
+  color-scheme: light;
+}
+
 @theme inline {
   --color-background: var(--bg-primary);
   --color-foreground: var(--text-primary);

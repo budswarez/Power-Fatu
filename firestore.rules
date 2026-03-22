@@ -45,5 +45,11 @@ service cloud.firestore {
       allow read:  if isAuthenticated();
       allow write: if isAdmin();
     }
+
+    match /audit_log/{id} {
+      allow read:          if isAdmin();
+      allow create:        if isAuthenticated();
+      allow update, delete: if false;  // imutável
+    }
   }
 }

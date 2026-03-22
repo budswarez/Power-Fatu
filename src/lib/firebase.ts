@@ -13,6 +13,8 @@ import {
   deleteDoc,
   query,
   where,
+  orderBy,
+  limit,
   Timestamp,
   type Firestore,
 } from "firebase/firestore";
@@ -59,5 +61,7 @@ export {
   deleteDoc,
   query,
   where,
+  orderBy,
+  limit,
   Timestamp,
 };

@@ -11,8 +11,12 @@ import {
   Settings2,
   Users,
   LogOut,
+  Sun,
+  Moon,
+  ClipboardList,
 } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
+import { useTheme } from "@/lib/use-theme";
 import type { Role } from "@/lib/types";
 
 interface NavItem {
@@ -24,10 +28,11 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { href: "/",           label: "Dashboard",        icon: LayoutDashboard, roles: ["user", "gerente", "admin"] },
-  { href: "/historical", label: "Dados Históricos",  icon: CalendarClock,   roles: ["gerente", "admin"] },
   { href: "/current",    label: "Mês Atual",         icon: CalendarCheck2,  roles: ["gerente", "admin"] },
+  { href: "/historical", label: "Dados Históricos",  icon: CalendarClock,   roles: ["gerente", "admin"] },
   { href: "/channels",   label: "Canais de Venda",   icon: Layers,          roles: ["admin"] },
   { href: "/users",      label: "Usuários",           icon: Users,           roles: ["admin"] },
+  { href: "/audit",      label: "Auditoria",          icon: ClipboardList,   roles: ["admin"] },
 ];
 
 const FOOTER_ITEMS: NavItem[] = [
@@ -50,6 +55,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const router = useRouter();
   const { user, signOut } = useAuth();
   const role = user?.role ?? "user";
+  const { theme, toggle: toggleTheme } = useTheme();
 
   const visibleNav    = NAV_ITEMS.filter((i) => i.roles.includes(role));
   const visibleFooter = FOOTER_ITEMS.filter((i) => i.roles.includes(role));
@@ -117,6 +123,16 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           </Link>
         ))}
         <button
+          onClick={toggleTheme}
+          className="sidebar-link w-full text-left"
+        >
+          {theme === "dark"
+            ? <Sun className="w-[18px] h-[18px]" />
+            : <Moon className="w-[18px] h-[18px]" />
+          }
+          {theme === "dark" ? "Modo Claro" : "Modo Escuro"}
+        </button>
+        <button
           onClick={handleSignOut}
           className="sidebar-link w-full text-left"
           style={{ color: "var(--accent-rose)" }}
@@ -124,7 +140,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <LogOut className="w-[18px] h-[18px]" />
           Sair
         </button>
-        <p className="text-[11px] text-[var(--text-muted)] px-4 pt-1">v1.0 • Firebase Edition</p>
+        <p className="text-[11px] text-[var(--text-muted)] px-4 pt-1">v1.1 • Firebase Edition</p>
       </div>
     </aside>
   );

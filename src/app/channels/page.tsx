@@ -13,6 +13,8 @@ import {
 } from "@/lib/firebase";
 import type { SalesChannel } from "@/lib/types";
 import { Layers, Plus, Trash2, Pencil, X, Check, AlertCircle } from "lucide-react";
+import { logAudit } from "@/lib/audit";
+import { useAuth } from "@/lib/auth-context";
 
 const PRESET_COLORS = [
   "#3b82f6", "#10b981", "#f59e0b", "#f43f5e", "#8b5cf6",
@@ -24,6 +26,7 @@ export default function ChannelsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const { user } = useAuth();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [color, setColor] = useState(PRESET_COLORS[0]);
@@ -56,12 +59,14 @@ export default function ChannelsPage() {
     try {
       if (editingId) {
         await updateDoc(doc(db, "channels", editingId), { name, color });
+        if (user) logAudit(user, "update", "channel", editingId, { name, color });
       } else {
-        await addDoc(collection(db, "channels"), {
+        const ref = await addDoc(collection(db, "channels"), {
           name,
           color,
           created_at: Timestamp.now(),
         });
+        if (user) logAudit(user, "create", "channel", ref.id, { name, color });
       }
       resetForm();
       fetchChannels();
@@ -76,6 +81,7 @@ export default function ChannelsPage() {
     setError(null);
     try {
       await deleteDoc(doc(db, "channels", id));
+      if (user) logAudit(user, "delete", "channel", id);
       fetchChannels();
     } catch (e) {
       console.error(e);

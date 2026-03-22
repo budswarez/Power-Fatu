@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { db, collection, getDocs, query, where, Timestamp, doc, getDoc } from "@/lib/firebase";
 import type { SalesChannel, DailySale, SalesRecord } from "@/lib/types";
 import {
@@ -8,7 +8,8 @@ import {
   projectMonthlyRevenue,
 } from "@/lib/prediction-engine";
 import { fmt } from "@/lib/format";
-import { TrendingUp, Activity, BarChart3, LayoutDashboard, Gauge } from "lucide-react";
+import { TrendingUp, Activity, BarChart3, LayoutDashboard, Gauge, AlertTriangle, CheckCircle2, Sheet, GitCompareArrows } from "lucide-react";
+import { exportSalesToExcel } from "@/lib/export";
 import {
   LineChart,
   Line,
@@ -18,6 +19,8 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+
+const COMP_PALETTE = ["#3b82f6","#10b981","#f59e0b","#f43f5e","#8b5cf6","#06b6d4"];
 
 function toSalesRecords(sales: DailySale[], type: "historical" | "current"): SalesRecord[] {
   return sales.map((s) => {
@@ -90,6 +93,76 @@ export default function DashboardPage() {
   const [selectedEvolution, setSelectedEvolution] = useState<Set<string> | null>(null);
   const [prevYearSales, setPrevYearSales] = useState<DailySale[]>([]);
   const [compareMode, setCompareMode] = useState<"prev_month" | "prev_year">("prev_month");
+  const [alertThreshold, setAlertThreshold] = useState<number>(10);
+
+  // Comparativo multi-meses
+  const [compMonths, setCompMonths] = useState<string[]>([]);
+  const [compData, setCompData] = useState<Record<string, DailySale[]>>({});
+  const [compLoading, setCompLoading] = useState(false);
+  const fetchedMonths = useRef<Set<string>>(new Set());
+
+  const monthOptions = useMemo(() => {
+    const opts: { key: string; label: string }[] = [];
+    const base = new Date();
+    base.setDate(1);
+    for (let i = 1; i <= 12; i++) {
+      base.setMonth(base.getMonth() - 1);
+      const y = base.getFullYear();
+      const m = base.getMonth() + 1;
+      const key = `${y}-${String(m).padStart(2, "0")}`;
+      const label = base.toLocaleString("pt-BR", { month: "short", year: "numeric" });
+      opts.push({ key, label });
+    }
+    return opts;
+  }, []);
+
+  useEffect(() => {
+    async function fetchComp() {
+      const toFetch = compMonths.filter(m => !fetchedMonths.current.has(m));
+      if (toFetch.length === 0) return;
+      setCompLoading(true);
+      const newData: Record<string, DailySale[]> = {};
+      for (const monthKey of toFetch) {
+        const [year, month] = monthKey.split("-").map(Number);
+        const start = new Date(year, month - 1, 1);
+        const end = new Date(year, month, 0, 23, 59, 59);
+        try {
+          const snap = await getDocs(query(
+            collection(db, "sales"),
+            where("date", ">=", Timestamp.fromDate(start)),
+            where("date", "<=", Timestamp.fromDate(end))
+          ));
+          newData[monthKey] = snap.docs.map(d => ({
+            id: d.id, ...d.data(), date: d.data().date?.toDate?.() ?? new Date(),
+          })) as DailySale[];
+          fetchedMonths.current.add(monthKey);
+        } catch (e) { console.error(e); }
+      }
+      setCompData(prev => ({ ...prev, ...newData }));
+      setCompLoading(false);
+    }
+    fetchComp();
+  }, [compMonths]);
+
+  const compChartData = useMemo(() => {
+    if (compMonths.length === 0) return [];
+    return Array.from({ length: 31 }, (_, i) => {
+      const day = i + 1;
+      const point: Record<string, number | null> = { day };
+      for (const monthKey of compMonths) {
+        const [y, m] = monthKey.split("-").map(Number);
+        const daysInM = new Date(y, m, 0).getDate();
+        if (day > daysInM) { point[monthKey] = null; continue; }
+        const sales = compData[monthKey] ?? [];
+        const hasDayData = sales.some(s => new Date(s.date).getDate() === day);
+        if (!hasDayData && day > 1) { point[monthKey] = null; continue; }
+        point[monthKey] = sales
+          .filter(s => new Date(s.date).getDate() <= day)
+          .reduce((sum, s) => sum + s.amount, 0) || null;
+      }
+      return point;
+    });
+  }, [compMonths, compData]);
 
   useEffect(() => {
     async function fetchData() {
@@ -144,8 +217,11 @@ export default function DashboardPage() {
 
         try {
           const settingsSnap = await getDoc(doc(db, "settings", "global"));
-          const firestoreTarget = settingsSnap.exists() ? settingsSnap.data().revenue_target : null;
-          if (firestoreTarget) setTarget(parseFloat(firestoreTarget));
+          if (settingsSnap.exists()) {
+            const data = settingsSnap.data();
+            if (data.revenue_target) setTarget(parseFloat(data.revenue_target));
+            if (data.alert_threshold != null) setAlertThreshold(Number(data.alert_threshold));
+          }
         } catch {
           // se falhar, meta fica em zero (sem fallback local)
         }
@@ -315,6 +391,14 @@ export default function DashboardPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => exportSalesToExcel(currentSales, channels, projection,
+              now.toLocaleString("pt-BR", { month: "long", year: "numeric" }))}
+            className="btn-ghost text-xs flex items-center gap-1.5 h-9 px-3"
+            title="Exportar para Excel"
+          >
+            <Sheet className="w-3.5 h-3.5" /> Excel
+          </button>
           <span className="text-xs text-[var(--text-muted)]">Comparar com:</span>
           <div className="flex gap-0.5 bg-[var(--bg-secondary)] rounded-lg p-0.5 border border-[var(--border-subtle)]">
             <button
@@ -435,6 +519,35 @@ export default function DashboardPage() {
         </div>
       </div>
 
+      {/* Alert banner */}
+      {target > 0 && projection && (() => {
+        const desvio = (projection.totalProjectedRevenue - target) / target * 100;
+        if (Math.abs(desvio) <= alertThreshold) return null;
+        const abaixo = desvio < 0;
+        return (
+          <div
+            className="glass-card px-4 py-3 flex items-center gap-3 border animate-in"
+            style={{
+              borderColor: abaixo ? "color-mix(in srgb, var(--accent-rose) 40%, transparent)" : "color-mix(in srgb, var(--accent-emerald) 40%, transparent)",
+              background: abaixo ? "color-mix(in srgb, var(--accent-rose) 6%, transparent)" : "color-mix(in srgb, var(--accent-emerald) 6%, transparent)",
+            }}
+          >
+            {abaixo
+              ? <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: "var(--accent-rose)" }} />
+              : <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: "var(--accent-emerald)" }} />
+            }
+            <p className="text-sm font-medium" style={{ color: abaixo ? "var(--accent-rose)" : "var(--accent-emerald)" }}>
+              Projeção {abaixo ? "abaixo" : "acima"} da meta em{" "}
+              <strong>{Math.abs(desvio).toFixed(1)}%</strong>
+              {abaixo
+                ? ` — faltam ${fmt(target - projection.totalProjectedRevenue)} para atingir a meta.`
+                : ` — ${fmt(projection.totalProjectedRevenue - target)} acima do objetivo.`
+              }
+            </p>
+          </div>
+        );
+      })()}
+
       {/* Target Progress */}
       {target > 0 && projResult && (() => {
         const stillNeeded = Math.max(0, target - projResult.accumulatedTotal);
@@ -480,6 +593,11 @@ export default function DashboardPage() {
                 >
                   {alreadyMet ? "✓ Meta batida" : fmt(stillNeeded)}
                 </p>
+                {!alreadyMet && (
+                  <p className="text-xs mt-0.5" style={{ color: "var(--accent-rose)" }}>
+                    {((stillNeeded / target) * 100).toFixed(1)}% da meta
+                  </p>
+                )}
               </div>
               <div className="rounded-xl p-3 text-center" style={{ backgroundColor: "var(--bg-secondary)" }}>
                 <p className="text-[10px] uppercase tracking-widest text-[var(--text-muted)] mb-1">Necessário/dia</p>
@@ -792,6 +910,114 @@ export default function DashboardPage() {
             </LineChart>
           </ResponsiveContainer>
         </div>
+      </div>
+
+      {/* Comparativo Multi-Meses */}
+      <div className="glass-card p-6 animate-in delay-4">
+        <div className="flex items-center gap-2 mb-3">
+          <GitCompareArrows className="w-4 h-4 text-[var(--accent-blue)]" />
+          <h2 className="text-sm font-bold text-[var(--text-primary)] tracking-wide">
+            Comparativo Multi-Meses
+          </h2>
+        </div>
+        <p className="text-xs text-[var(--text-muted)] mb-4">
+          Selecione até 6 meses para sobrepor as curvas de faturamento acumulado.
+        </p>
+
+        <div className="flex flex-wrap gap-2 mb-4">
+          {monthOptions.map(({ key, label }) => {
+            const active = compMonths.includes(key);
+            const color = COMP_PALETTE[compMonths.indexOf(key)] ?? "var(--text-muted)";
+            return (
+              <button
+                key={key}
+                onClick={() => {
+                  if (active) {
+                    setCompMonths(prev => prev.filter(m => m !== key));
+                  } else if (compMonths.length < 6) {
+                    setCompMonths(prev => [...prev, key]);
+                  }
+                }}
+                disabled={!active && compMonths.length >= 6}
+                className="px-3 py-1.5 rounded-full text-xs font-medium transition-all border"
+                style={{
+                  borderColor: active ? color : "var(--border-subtle)",
+                  color: active ? color : "var(--text-muted)",
+                  backgroundColor: active ? `${color}15` : "transparent",
+                  opacity: !active && compMonths.length >= 6 ? 0.4 : 1,
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
+          {compMonths.length > 0 && (
+            <button
+              onClick={() => setCompMonths([])}
+              className="px-3 py-1.5 rounded-full text-xs text-[var(--text-muted)] border border-[var(--border-subtle)] hover:border-[var(--accent-rose)]/50 hover:text-[var(--accent-rose)] transition-all"
+            >
+              Limpar
+            </button>
+          )}
+        </div>
+
+        {compMonths.length > 0 ? (
+          compLoading ? (
+            <div className="h-48 flex items-center justify-center text-[var(--text-muted)] text-sm animate-pulse">
+              Carregando dados…
+            </div>
+          ) : (
+            <div className="w-full">
+              <ResponsiveContainer width="100%" height={260}>
+                <LineChart data={compChartData} margin={{ top: 0, left: -10, right: 0, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
+                  <XAxis
+                    dataKey="day" axisLine={false} tickLine={false}
+                    tick={{ fill: "var(--text-muted)", fontSize: 12 }} dy={10}
+                  />
+                  <YAxis
+                    axisLine={false} tickLine={false}
+                    tickFormatter={v => v >= 1_000_000 ? `R$${(v/1_000_000).toFixed(1)}M` : `R$${(v/1000).toFixed(0)}k`}
+                    tick={{ fill: "var(--text-muted)", fontSize: 12 }} width={60}
+                  />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: "var(--bg-card)", border: "1px solid var(--border-subtle)", borderRadius: "12px", color: "var(--text-primary)" }}
+                    itemStyle={{ fontSize: "13px", fontWeight: "600" }}
+                    formatter={(value: unknown, name: unknown) => {
+                      const opt = monthOptions.find(o => o.key === (name as string));
+                      return [fmt(Number(value) || 0), opt?.label ?? (name as string)];
+                    }}
+                    labelFormatter={lbl => `Dia ${lbl}`}
+                  />
+                  {compMonths.map((monthKey, i) => (
+                    <Line
+                      key={monthKey}
+                      type="monotone"
+                      dataKey={monthKey}
+                      stroke={COMP_PALETTE[i]}
+                      strokeWidth={2}
+                      dot={false}
+                      connectNulls={false}
+                      name={monthKey}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+              <div className="flex flex-wrap gap-4 justify-center mt-2">
+                {compMonths.map((monthKey, i) => (
+                  <div key={monthKey} className="flex items-center gap-1.5 text-xs text-[var(--text-muted)]">
+                    <span className="w-3 h-0.5 rounded-full inline-block" style={{ backgroundColor: COMP_PALETTE[i] }} />
+                    {monthOptions.find(o => o.key === monthKey)?.label ?? monthKey}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )
+        ) : (
+          <div className="h-24 flex items-center justify-center text-xs text-[var(--text-muted)] border border-dashed border-[var(--border-subtle)] rounded-xl">
+            Selecione meses acima para visualizar o comparativo
+          </div>
+        )}
       </div>
 
     </div>

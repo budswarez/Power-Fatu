@@ -16,6 +16,8 @@ import {
 import type { SalesChannel, DailySale } from "@/lib/types";
 import { CalendarCheck2, Pencil, Plus, Trash2, AlertCircle } from "lucide-react";
 import { fmt, fmtCompact, getChannelName, getChannelColor } from "@/lib/format";
+import { logAudit } from "@/lib/audit";
+import { useAuth } from "@/lib/auth-context";
 
 export default function CurrentMonthPage() {
   const [channels, setChannels] = useState<SalesChannel[]>([]);
@@ -37,6 +39,7 @@ export default function CurrentMonthPage() {
   const [orderCount, setOrderCount] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const { user } = useAuth();
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -96,8 +99,10 @@ export default function CurrentMonthPage() {
       };
       if (editingId) {
         await updateDoc(doc(db, "sales", editingId), payload);
+        if (user) logAudit(user, "update", "sale", editingId, { channel_id: channelId, amount: parsedAmount });
       } else {
-        await addDoc(collection(db, "sales"), payload);
+        const ref = await addDoc(collection(db, "sales"), payload);
+        if (user) logAudit(user, "create", "sale", ref.id, { channel_id: channelId, amount: parsedAmount });
       }
       resetForm();
       fetchData();
@@ -113,6 +118,7 @@ export default function CurrentMonthPage() {
     setError(null);
     try {
       await deleteDoc(doc(db, "sales", id));
+      if (user) logAudit(user, "delete", "sale", id);
       fetchData();
     } catch (e) {
       console.error(e);

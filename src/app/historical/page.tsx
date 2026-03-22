@@ -24,8 +24,12 @@ import {
   FileText,
   CheckCircle,
   AlertCircle,
+  Sheet,
 } from "lucide-react";
 import { fmt, fmtCompact, getChannelName, getChannelColor } from "@/lib/format";
+import { exportSalesToExcel } from "@/lib/export";
+import { logAudit } from "@/lib/audit";
+import { useAuth } from "@/lib/auth-context";
 
 type ParsedRow = {
   channel_id: string;
@@ -53,6 +57,8 @@ export default function HistoricalPage() {
   const [orderCount, setOrderCount] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+
+  const { user } = useAuth();
 
   // CSV import
   const [csvFile, setCsvFile] = useState<File | null>(null);
@@ -119,8 +125,10 @@ export default function HistoricalPage() {
       };
       if (editingId) {
         await updateDoc(doc(db, "sales", editingId), payload);
+        if (user) logAudit(user, "update", "sale", editingId, { channel_id: channelId, amount: parsedAmount });
       } else {
-        await addDoc(collection(db, "sales"), payload);
+        const ref = await addDoc(collection(db, "sales"), payload);
+        if (user) logAudit(user, "create", "sale", ref.id, { channel_id: channelId, amount: parsedAmount });
       }
       resetForm();
       fetchData();
@@ -136,6 +144,7 @@ export default function HistoricalPage() {
     setError(null);
     try {
       await deleteDoc(doc(db, "sales", id));
+      if (user) logAudit(user, "delete", "sale", id);
       fetchData();
     } catch (e) {
       console.error(e);
@@ -359,6 +368,14 @@ export default function HistoricalPage() {
           onChange={(e) => setSelectedMonth(e.target.value)}
           className="w-full sm:w-44"
         />
+        {sales.length > 0 && (
+          <button
+            onClick={() => exportSalesToExcel(sales, channels, null, selectedMonth)}
+            className="btn-ghost text-xs flex items-center gap-1.5 h-9 px-3 sm:ml-auto"
+          >
+            <Sheet className="w-3.5 h-3.5" /> Exportar Excel
+          </button>
+        )}
       </div>
 
       {channels.length === 0 ? (
@@ -624,6 +641,7 @@ export default function HistoricalPage() {
           </div>
         </div>
       )}
+
     </div>
   );
 }
