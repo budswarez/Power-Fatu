@@ -1,40 +1,148 @@
-# PFatu - Projeção de Faturamento
+# PFatu — Projeção de Faturamento
 
-PFatu é uma plataforma de análise preditiva de faturamento multicanal, projetada para consolidar dados diários de vendas atuais e históricas para ajudar a extrapolar os resultados do final do mês através de cálculos de tendências e pesos sazonais.
+Plataforma web para análise preditiva de faturamento multicanal com motor de sazonalidade. Permite registrar vendas históricas e do mês atual, calcular projeções de encerramento do mês e acompanhar o desempenho por canal em tempo real.
 
-## Tecnologias Utilizadas
+---
 
-- **Frontend:** Next.js (App Router), React, Tailwind CSS, Recharts (para gráficos), Lucide React (para ícones)
-- **Backend/Data:** Firebase (Firestore) para persistência em tempo real e agregação nos clientes
+## Stack
+
+| Camada | Tecnologia |
+|--------|------------|
+| Framework | Next.js 16 (App Router) |
+| UI | React 19 + Tailwind CSS v4 |
+| Gráficos | Recharts 3 |
+| Ícones | Lucide React |
+| Autenticação | Firebase Authentication (Email/Password) |
+| Banco de dados | Cloud Firestore |
+| API server-side | Next.js Route Handlers + Firebase Admin SDK 13 |
+| Deploy | Vercel |
+
+---
 
 ## Funcionalidades
 
-- **Dashboard Integrado:** Visualização de todos os KPIs da empresa (faturamento acumulado atual, projeção para o mês e ticket médio) em gráficos contínuos interativos.
-- **Gestão de Canais:** Crie e gerencie os pontos de captação de vendas com cores personalizadas.
-- **Dados Históricos:** Insira as vendas diárias da safra anterior na mesma janela para gerar um parâmetro comparativo.
-- **Execução do Mês Atual:** Preencha os ganhos da execução correspondente aos canais e observe a IA extrapolar os padrões para a meta do mês.
-- **Configuração de Meta Mensal:** Ajuste a meta que deseja atingir no mês em configurações, e o Dashboard dirá qual a saúde do projeto.
+| Tela | Role mínimo | Descrição |
+|------|:-----------:|-----------|
+| Dashboard | `user` | KPIs do mês (acumulado, projeção, ticket médio), progresso vs meta, gráfico cumulativo por canal, gráfico diário por canal |
+| Dados Históricos | `gerente` | Cadastro manual e importação via CSV de vendas de meses anteriores |
+| Mês Atual | `gerente` | Lançamento diário de vendas por canal com edição e exclusão |
+| Canais de Venda | `admin` | Cadastro de canais com nome e cor personalizáveis |
+| Configurações | `admin` | Meta de faturamento mensal global (Firestore) |
+| Usuários | `admin` | Criar, editar (nome, e-mail, senha, perfil) e excluir usuários |
 
-## Primeiros Passos
+---
 
-Inicie o servidor de desenvolvimento:
+## Estrutura do projeto
 
-```bash
-npm run dev
-# ou
-yarn dev
-# ou
-pnpm dev
-# ou
-bun dev
+```
+src/
+├── app/
+│   ├── page.tsx                    # Dashboard
+│   ├── layout.tsx                  # Root layout + viewport + AuthProvider + AppShell
+│   ├── globals.css                 # Design system (dark glassmorphism, tokens CSS)
+│   ├── login/page.tsx              # Tela de login
+│   ├── setup/page.tsx              # Criação do primeiro admin
+│   ├── historical/page.tsx         # Dados históricos (manual + CSV)
+│   ├── current/page.tsx            # Mês atual
+│   ├── channels/page.tsx           # Canais de venda
+│   ├── settings/page.tsx           # Configurações
+│   ├── users/page.tsx              # Gestão de usuários
+│   └── api/
+│       └── users/[uid]/route.ts    # PATCH + DELETE via Firebase Admin
+├── components/
+│   ├── app-shell.tsx               # Route guard RBAC + layout responsivo + drawer mobile
+│   └── sidebar.tsx                 # Navegação lateral role-based + slide-in mobile
+└── lib/
+    ├── firebase.ts                 # Firebase client SDK + createSecondaryApp
+    ├── firebase-admin.ts           # Firebase Admin SDK (lazy init)
+    ├── auth-context.tsx            # AuthProvider + useAuth hook
+    ├── format.ts                   # fmt(), fmtCompact(), helpers de canal
+    ├── prediction-engine.ts        # Motor de projeção com sazonalidade
+    └── types.ts                    # Tipos compartilhados (Role, UserProfile, etc.)
+
+firestore.rules                     # Regras de segurança Firestore (RBAC)
 ```
 
-Abra [http://localhost:3000](http://localhost:3000) no seu navegador para ver o resultado.
+---
 
-## Uso
+## Roles e permissões
 
-1. Entre em **Canais de Venda** e crie os seus canais principais (ex: Loja Física, E-commerce, WhatsApp).
-2. Defina uma meta global em **Configurações**.
-3. Adicione dados de faturamento passado em **Dados Históricos**.
-4. Atualize frequentemente a página **Mês Atual** na qual toda a projeção irá basear-se.
-5. Volte para o **Dashboard** para ver a mágica da extrapolação do fim de mês acontecer!
+| Role | Dashboard | Histórico | Mês Atual | Canais | Config | Usuários |
+|------|:---------:|:---------:|:---------:|:------:|:------:|:--------:|
+| `user` | ✓ | — | — | — | — | — |
+| `gerente` | ✓ | ✓ | ✓ | — | — | — |
+| `admin` | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+
+---
+
+## Configuração local
+
+### Pré-requisitos
+- Node.js 18+
+- Projeto Firebase com **Authentication (Email/Password)** e **Firestore** habilitados
+- Conta de serviço Firebase Admin para as variáveis server-side
+
+### Variáveis de ambiente — `.env.local`
+
+```env
+# Firebase Client SDK (público — prefixo NEXT_PUBLIC_)
+NEXT_PUBLIC_FIREBASE_API_KEY=
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
+NEXT_PUBLIC_FIREBASE_APP_ID=
+
+# Firebase Admin SDK (server-side — nunca expor ao cliente)
+FIREBASE_ADMIN_PROJECT_ID=
+FIREBASE_ADMIN_CLIENT_EMAIL=
+FIREBASE_ADMIN_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+```
+
+> A `FIREBASE_ADMIN_PRIVATE_KEY` deve ter as quebras de linha como `\n` literais (em aspas duplas) no arquivo `.env.local`. O código faz o replace automaticamente.
+
+### Instalação e execução
+
+```bash
+npm install
+npm run dev        # http://localhost:3000
+npm run build      # build de produção
+```
+
+### Primeiro acesso
+
+1. Acesse `/setup` — cria o administrador inicial
+2. Após criado, redireciona automaticamente para `/`
+3. Em **Usuários**, crie os demais usuários com os perfis adequados
+
+### Regras do Firestore
+
+```bash
+firebase deploy --only firestore:rules --project <project-id>
+```
+
+---
+
+## Deploy (Vercel)
+
+Configure as variáveis `FIREBASE_ADMIN_*` como **Encrypted** nas Environment Variables do projeto na Vercel. Após adicioná-las, faça um novo deploy para ativá-las:
+
+```bash
+vercel --prod
+```
+
+---
+
+## Design system
+
+A aplicação usa um tema escuro glassmorphism definido em `globals.css` com tokens CSS (`--bg-primary`, `--accent-blue`, etc.). Componentes principais:
+
+- `.glass-card` — card com backdrop-filter e borda sutil
+- `.btn-primary` / `.btn-ghost` / `.btn-danger` — botões padronizados
+- `.sidebar-link` / `.sidebar-link.active` — links da navegação lateral
+- `.animate-in` + `.delay-N` — animações de entrada fadeInUp
+
+### Responsividade
+
+- **Mobile** (`< 768px`): header fixo com hambúrguer, sidebar como drawer overlay, grids colapsam para 1 coluna, tabelas com valores compactos (`fmtCompact`)
+- **Desktop** (`≥ 768px`): sidebar fixa lateral de 260px, padding `p-8`, valores completos nas tabelas
