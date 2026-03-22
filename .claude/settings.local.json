@@ -3,7 +3,19 @@
     "allow": [
       "Bash(firebase deploy:*)",
       "Bash(npm run build:*)",
-      "Bash(firebase projects:list:*)"
+      "Bash(firebase projects:list:*)",
+      "Bash(npm install:*)",
+      "Bash(gcloud auth list:*)",
+      "Bash(firebase login:list:*)",
+      "Bash(firebase --print-token:*)",
+      "Read(//c/Users/budsw/AppData/Roaming/**)",
+      "Read(//c/Users/budsw/**)",
+      "Bash(python3:*)",
+      "Bash(vercel:*)",
+      "Bash(vercel env ls:*)"
+    ],
+    "additionalDirectories": [
+      "d:\\Projeto Ai\\PFatu\\src\\app\\api\\users"
     ]
   }
 }

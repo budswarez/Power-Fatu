@@ -85,6 +85,26 @@ body {
   box-shadow: inset 3px 0 0 var(--accent-blue);
 }
 
+/* Suprimir botões nativos do browser em campos de senha */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+input[type="password"]::-webkit-credentials-auto-fill-button,
+input[type="password"]::-webkit-strong-password-auto-fill-button {
+  display: none !important;
+  pointer-events: none;
+}
+
+/* Corrigir autofill do browser em tema escuro */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus {
+  -webkit-box-shadow: 0 0 0 30px var(--bg-secondary) inset !important;
+  -webkit-text-fill-color: var(--text-primary) !important;
+  caret-color: var(--text-primary);
+}
+
 /* Input styles */
 input[type="password"],
 input[type="text"],

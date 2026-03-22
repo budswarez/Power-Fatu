@@ -8,13 +8,13 @@ import {
   getDoc,
   setDoc,
   updateDoc,
-  deleteDoc,
   collection,
   Timestamp,
   createSecondaryApp,
   deleteApp,
 } from "@/lib/firebase";
 import { getAuth, createUserWithEmailAndPassword, signOut as firebaseSignOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
 import type { Role, UserProfile } from "@/lib/types";
 import { Users, Plus, Pencil, Trash2, Check, X, AlertCircle, ShieldAlert } from "lucide-react";
 
@@ -109,7 +109,7 @@ export default function UsersPage() {
       }
       console.error(e);
     } finally {
-      await deleteApp(secondaryApp);
+      deleteApp(secondaryApp).catch(() => {});
       setSaving(false);
     }
   }
@@ -127,14 +127,22 @@ export default function UsersPage() {
   }
 
   async function handleDelete(uid: string, name: string) {
-    if (!confirm(`Remover "${name}" do sistema? A conta Firebase permanece ativa.`)) return;
+    if (!confirm(`Remover "${name}" permanentemente? Isso remove o acesso ao sistema e a conta Firebase.`)) return;
     setError(null);
     try {
-      await deleteDoc(doc(db, "users", uid));
+      const token = await auth.currentUser?.getIdToken();
+      const res = await fetch(`/api/users/${uid}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error ?? "Erro desconhecido");
+      }
       fetchUsers();
     } catch (e) {
       console.error(e);
-      setError("Erro ao remover usuário.");
+      setError(e instanceof Error ? e.message : "Erro ao remover usuário.");
     }
   }
 
@@ -306,8 +314,7 @@ export default function UsersPage() {
       >
         <ShieldAlert className="w-4 h-4 shrink-0 mt-0.5" style={{ color: "var(--accent-amber)" }} />
         <span>
-          Remover um usuário revoga o acesso ao sistema imediatamente. A conta Firebase Auth permanece ativa —
-          para removê-la definitivamente, acesse o Firebase Console → Authentication.
+          Remover um usuário exclui permanentemente o acesso ao sistema e a conta Firebase Authentication.
         </span>
       </div>
     </div>
