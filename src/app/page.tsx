@@ -5,13 +5,12 @@ import { db, collection, getDocs, query, where, Timestamp } from "@/lib/firebase
 import type { SalesChannel, DailySale, SalesRecord } from "@/lib/types";
 import {
   computeConsolidatedProjection,
-  buildDailyChartData,
   projectMonthlyRevenue,
 } from "@/lib/prediction-engine";
 import { TrendingUp, Activity, BarChart3, LayoutDashboard, Gauge } from "lucide-react";
 import {
-  AreaChart,
-  Area,
+  LineChart,
+  Line,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -36,6 +35,38 @@ function toSalesRecords(sales: DailySale[], type: "historical" | "current"): Sal
   });
 }
 
+function toggleChannel(
+  id: string,
+  channels: SalesChannel[],
+  prev: Set<string> | null,
+  set: (v: Set<string>) => void
+) {
+  const base = prev ?? new Set(channels.map(c => c.id));
+  const next = new Set(base);
+  if (next.has(id) && next.size > 1) next.delete(id);
+  else next.add(id);
+  set(next);
+}
+
+function diffBadge(current: number, base: number) {
+  if (base <= 0) return null;
+  const diff = (current - base) / base;
+  const pos = diff >= 0;
+  return (
+    <span
+      className="text-xs font-bold px-1.5 py-0.5 rounded-md shrink-0"
+      style={{
+        color: pos ? "var(--accent-emerald)" : "var(--accent-rose)",
+        backgroundColor: pos
+          ? "color-mix(in srgb, var(--accent-emerald) 12%, transparent)"
+          : "color-mix(in srgb, var(--accent-rose) 12%, transparent)",
+      }}
+    >
+      {pos ? "+" : ""}{(diff * 100).toFixed(1)}%
+    </span>
+  );
+}
+
 function confidenceColor(c: number) {
   if (c >= 0.7) return "var(--accent-emerald)";
   if (c >= 0.4) return "var(--accent-amber)";
@@ -54,6 +85,10 @@ export default function DashboardPage() {
   const [historicalSales, setHistoricalSales] = useState<DailySale[]>([]);
   const [loading, setLoading] = useState(true);
   const [target, setTarget] = useState<number>(0);
+  const [selectedChannels, setSelectedChannels] = useState<Set<string> | null>(null);
+  const [selectedEvolution, setSelectedEvolution] = useState<Set<string> | null>(null);
+  const [prevYearSales, setPrevYearSales] = useState<DailySale[]>([]);
+  const [compareMode, setCompareMode] = useState<"prev_month" | "prev_year">("prev_month");
 
   useEffect(() => {
     async function fetchData() {
@@ -64,8 +99,10 @@ export default function DashboardPage() {
         const endCurr = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
         const startHist = new Date(now.getFullYear(), now.getMonth() - 1, 1);
         const endHist = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+        const startPrevYear = new Date(now.getFullYear() - 1, now.getMonth(), 1);
+        const endPrevYear = new Date(now.getFullYear() - 1, now.getMonth() + 1, 0, 23, 59, 59);
 
-        const [chSnap, currSnap, histSnap] = await Promise.all([
+        const [chSnap, currSnap, histSnap, prevYearSnap] = await Promise.all([
           getDocs(collection(db, "channels")),
           getDocs(
             query(
@@ -79,6 +116,13 @@ export default function DashboardPage() {
               collection(db, "sales"),
               where("date", ">=", Timestamp.fromDate(startHist)),
               where("date", "<=", Timestamp.fromDate(endHist))
+            )
+          ),
+          getDocs(
+            query(
+              collection(db, "sales"),
+              where("date", ">=", Timestamp.fromDate(startPrevYear)),
+              where("date", "<=", Timestamp.fromDate(endPrevYear))
             )
           ),
         ]);
@@ -95,6 +139,7 @@ export default function DashboardPage() {
 
         setCurrentSales(mapSales(currSnap));
         setHistoricalSales(mapSales(histSnap));
+        setPrevYearSales(mapSales(prevYearSnap));
 
         const savedTarget = localStorage.getItem("revenue_target");
         if (savedTarget) setTarget(parseFloat(savedTarget));
@@ -110,10 +155,12 @@ export default function DashboardPage() {
   const currentMonthNum = now.getMonth() + 1;
   const currentYearNum = now.getFullYear();
 
+  const comparisonSales = compareMode === "prev_month" ? historicalSales : prevYearSales;
+
   const projection = useMemo(() => {
     if (!channels.length) return null;
     const currRecords = toSalesRecords(currentSales, "current");
-    const histRecords = toSalesRecords(historicalSales, "historical");
+    const histRecords = toSalesRecords(comparisonSales, "historical");
     return computeConsolidatedProjection(
       channels,
       currRecords,
@@ -121,23 +168,97 @@ export default function DashboardPage() {
       currentMonthNum,
       currentYearNum
     );
-  }, [channels, currentSales, historicalSales, currentMonthNum, currentYearNum]);
+  }, [channels, currentSales, comparisonSales, currentMonthNum, currentYearNum]);
 
   // Detailed projection result (confidence, bounds, target tracking)
   const projResult = useMemo(() => {
     if (currentSales.length === 0) return null;
-    return projectMonthlyRevenue(currentSales, historicalSales, target || undefined);
-  }, [currentSales, historicalSales, target]);
+    return projectMonthlyRevenue(currentSales, comparisonSales, target || undefined);
+  }, [currentSales, comparisonSales, target]);
 
-  const chartData = useMemo(() => {
-    if (!projection) return [];
+  const evolutionData = useMemo(() => {
+    if (!channels.length) return [];
     const totalDays = new Date(currentYearNum, currentMonthNum, 0).getDate();
-    return buildDailyChartData(
-      toSalesRecords(currentSales, "current"),
-      toSalesRecords(historicalSales, "historical"),
-      totalDays
-    );
-  }, [currentSales, historicalSales, projection, currentMonthNum, currentYearNum]);
+    const points: Record<string, number | null>[] = Array.from({ length: totalDays }, (_, i) => ({ day: i + 1 }));
+
+    // Combined historical cumulative (all channels)
+    let cumHist = 0;
+    for (let d = 1; d <= totalDays; d++) {
+      cumHist += comparisonSales
+        .filter(s => new Date(s.date).getDate() === d)
+        .reduce((sum, s) => sum + s.amount, 0);
+      points[d - 1].hist = cumHist;
+    }
+
+    // Consolidated total cumulative + projection
+    const allDays = currentSales.map(s => new Date(s.date).getDate());
+    const lastDayTotal = allDays.length > 0 ? Math.max(...allDays) : 0;
+    let cumTotal = 0;
+    for (let d = 1; d <= totalDays; d++) {
+      cumTotal += currentSales
+        .filter(s => new Date(s.date).getDate() === d)
+        .reduce((sum, s) => sum + s.amount, 0);
+      points[d - 1].total = d <= lastDayTotal ? cumTotal : null;
+      points[d - 1].total_p = null;
+    }
+    if (lastDayTotal > 0 && lastDayTotal < totalDays && cumTotal > 0) {
+      const rate = cumTotal / lastDayTotal;
+      for (let d = lastDayTotal; d <= totalDays; d++) {
+        points[d - 1].total_p = rate * d;
+      }
+    }
+
+    // Per-channel current cumulative + projected extrapolation
+    channels.forEach(ch => {
+      const chSales = currentSales.filter(s => s.channel_id === ch.id);
+      const dataDays = chSales.map(s => new Date(s.date).getDate());
+      const lastDay = dataDays.length > 0 ? Math.max(...dataDays) : 0;
+
+      let cum = 0;
+      for (let d = 1; d <= totalDays; d++) {
+        cum += chSales
+          .filter(s => new Date(s.date).getDate() === d)
+          .reduce((sum, s) => sum + s.amount, 0);
+        points[d - 1][ch.id] = d <= lastDay ? cum : null;
+        points[d - 1][ch.id + "_p"] = null;
+      }
+
+      // Linear projection from last data day onwards
+      if (lastDay > 0 && lastDay < totalDays && cum > 0) {
+        const dailyRate = cum / lastDay;
+        for (let d = lastDay; d <= totalDays; d++) {
+          points[d - 1][ch.id + "_p"] = dailyRate * d;
+        }
+      }
+    });
+
+    return points;
+  }, [channels, currentSales, comparisonSales, currentMonthNum, currentYearNum]);
+
+  // Day-by-day revenue per channel for the line chart
+  const dailyChannelData = useMemo(() => {
+    if (!projection) return [];
+    return Array.from({ length: projection.totalDays }, (_, i) => {
+      const day = i + 1;
+      const point: Record<string, number | null> = { day };
+      channels.forEach(ch => {
+        const total = currentSales
+          .filter(s => s.channel_id === ch.id && new Date(s.date).getDate() === day)
+          .reduce((sum, s) => sum + s.amount, 0);
+        point[ch.id] = total > 0 ? total : null;
+      });
+      return point;
+    });
+  }, [channels, currentSales, projection]);
+
+  const effectiveSelected = selectedChannels ?? new Set(channels.map(c => c.id));
+  const effectiveEvolution = selectedEvolution ?? new Set(channels.map(c => c.id));
+  const compareLabel = compareMode === "prev_month" ? "Mês Anterior" : "Mesmo Mês (Ano Anterior)";
+  const currentDay = now.getDate();
+  const comparisonAccumulated = comparisonSales
+    .filter(s => new Date(s.date).getDate() <= currentDay)
+    .reduce((sum, s) => sum + s.amount, 0);
+  const comparisonFullMonth = comparisonSales.reduce((sum, s) => sum + s.amount, 0);
 
   const fmt = (v: number) =>
     v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -172,15 +293,44 @@ export default function DashboardPage() {
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-xl bg-[var(--accent-blue)]/15 flex items-center justify-center">
-          <LayoutDashboard className="w-5 h-5 text-[var(--accent-blue)]" />
+      <div className="flex items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[var(--accent-blue)]/15 flex items-center justify-center">
+            <LayoutDashboard className="w-5 h-5 text-[var(--accent-blue)]" />
+          </div>
+          <div>
+            <h1 className="text-xl font-bold">Dashboard</h1>
+            <p className="text-sm text-[var(--text-muted)]">
+              Visão consolidada · {now.toLocaleString("pt-BR", { month: "long", year: "numeric" })}
+            </p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-xl font-bold">Dashboard</h1>
-          <p className="text-sm text-[var(--text-muted)]">
-            Visão consolidada · {now.toLocaleString("pt-BR", { month: "long", year: "numeric" })}
-          </p>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-[var(--text-muted)]">Comparar com:</span>
+          <div className="flex gap-0.5 bg-[var(--bg-secondary)] rounded-lg p-0.5 border border-[var(--border-subtle)]">
+            <button
+              onClick={() => setCompareMode("prev_month")}
+              className="px-3 py-1.5 rounded-md text-xs font-medium transition-all"
+              style={{
+                backgroundColor: compareMode === "prev_month" ? "var(--bg-card)" : "transparent",
+                color: compareMode === "prev_month" ? "var(--text-primary)" : "var(--text-muted)",
+                boxShadow: compareMode === "prev_month" ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
+              }}
+            >
+              Mês Anterior
+            </button>
+            <button
+              onClick={() => setCompareMode("prev_year")}
+              className="px-3 py-1.5 rounded-md text-xs font-medium transition-all"
+              style={{
+                backgroundColor: compareMode === "prev_year" ? "var(--bg-card)" : "transparent",
+                color: compareMode === "prev_year" ? "var(--text-primary)" : "var(--text-muted)",
+                boxShadow: compareMode === "prev_year" ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
+              }}
+            >
+              Mesmo Mês (Ano Anterior)
+            </button>
+          </div>
         </div>
       </div>
 
@@ -198,6 +348,12 @@ export default function DashboardPage() {
             <p className="text-sm text-[var(--text-secondary)] mt-1">
               {projection.totalCurrentOrders} pedidos registrados
             </p>
+            {comparisonAccumulated > 0 && (
+              <p className="text-xs text-[var(--text-muted)] mt-1.5 flex items-center gap-1.5 flex-wrap">
+                <span>{compareLabel} (até dia {currentDay}): {fmt(comparisonAccumulated)}</span>
+                {diffBadge(projection.totalCurrentRevenue, comparisonAccumulated)}
+              </p>
+            )}
           </div>
           <div className="absolute -right-6 -bottom-6 opacity-10 blur-xl">
             <TrendingUp className="w-32 h-32 text-[var(--accent-blue)]" />
@@ -215,7 +371,7 @@ export default function DashboardPage() {
                   color: confidenceColor(projResult.confidence),
                 }}
               >
-                <Gauge className="w-3 h-3" />
+                <Gauge className="w-4 h-4" />
                 {confidenceLabel(projResult.confidence)}
               </span>
             )}
@@ -228,6 +384,12 @@ export default function DashboardPage() {
             {projResult && (
               <p className="text-xs text-[var(--text-muted)] mt-0.5">
                 {fmt(projResult.lowerBound)} — {fmt(projResult.upperBound)}
+              </p>
+            )}
+            {comparisonFullMonth > 0 && (
+              <p className="text-xs text-[var(--text-muted)] mt-1.5 flex items-center gap-1.5 flex-wrap">
+                <span>{compareLabel}: {fmt(comparisonFullMonth)}</span>
+                {diffBadge(projection.totalProjectedRevenue, comparisonFullMonth)}
               </p>
             )}
             {target > 0 && (
@@ -256,33 +418,84 @@ export default function DashboardPage() {
             <p className="text-3xl font-bold text-[var(--text-primary)]">
               {fmt(projection.projectedTicket)}
             </p>
-            <p className="text-sm text-[var(--text-secondary)] mt-1">
-              Mês anterior: {fmt(projection.historicalTicket)}
+            <p className="text-sm text-[var(--text-secondary)] mt-1 flex items-center gap-2 flex-wrap">
+              {compareLabel}: {fmt(projection.historicalTicket)}
+              {diffBadge(projection.projectedTicket, projection.historicalTicket)}
             </p>
           </div>
         </div>
       </div>
 
+      {/* Target Progress */}
+      {target > 0 && projResult && (
+        <div className="glass-card p-6 animate-in delay-4">
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-sm font-semibold">Progresso vs Meta</p>
+            <p className="text-sm text-[var(--text-muted)]">
+              {pct(projResult.accumulatedTotal / target)} acumulado ·{" "}
+              {pct(projResult.confidence)} de confiança
+            </p>
+          </div>
+          <div className="h-2.5 bg-[var(--bg-secondary)] rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-1000"
+              style={{
+                width: `${Math.min(100, (projResult.accumulatedTotal / target) * 100)}%`,
+                background: "linear-gradient(90deg, var(--accent-emerald), var(--accent-blue))",
+              }}
+            />
+          </div>
+          <div className="flex justify-between mt-2 text-xs text-[var(--text-muted)]">
+            <span>Acumulado: {fmt(projResult.accumulatedTotal)}</span>
+            <span>Meta: {fmt(target)}</span>
+          </div>
+          {projResult.targetMet !== undefined && (
+            <p
+              className="mt-2 text-sm font-medium"
+              style={{
+                color: projResult.targetMet ? "var(--accent-emerald)" : "var(--accent-rose)",
+              }}
+            >
+              {projResult.targetMet
+                ? "✓ Projeção indica que a meta será alcançada!"
+                : `✗ Projeção indica ${fmt(target - projResult.projected)} abaixo da meta`}
+            </p>
+          )}
+        </div>
+      )}
+
       {/* Chart + Channel Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in delay-4">
         {/* Cumulative Chart */}
         <div className="glass-card p-6 lg:col-span-2 flex flex-col">
-          <h2 className="text-sm font-bold text-[var(--text-primary)] mb-6 tracking-wide">
-            Evolução de Faturamento (Acumulado Diário)
-          </h2>
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+            <h2 className="text-sm font-bold text-[var(--text-primary)] tracking-wide">
+              Evolução de Faturamento (Acumulado Diário)
+            </h2>
+            <div className="flex gap-2 flex-wrap">
+              {channels.map(ch => {
+                const active = effectiveEvolution.has(ch.id);
+                return (
+                  <button
+                    key={ch.id}
+                    onClick={() => toggleChannel(ch.id, channels, selectedEvolution, setSelectedEvolution)}
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all duration-200"
+                    style={{
+                      backgroundColor: active ? `${ch.color}20` : "rgba(255,255,255,0.04)",
+                      color: active ? ch.color : "var(--text-muted)",
+                      border: `1px solid ${active ? ch.color + "50" : "var(--border-subtle)"}`,
+                    }}
+                  >
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: active ? ch.color : "var(--text-muted)" }} />
+                    {ch.name}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
           <div className="flex-1 w-full min-h-[280px]">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={chartData} margin={{ top: 0, left: -20, right: 0, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorCurrent" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--accent-blue)" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="var(--accent-blue)" stopOpacity={0} />
-                  </linearGradient>
-                  <linearGradient id="colorHistorical" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="var(--text-muted)" stopOpacity={0.2} />
-                    <stop offset="95%" stopColor="var(--text-muted)" stopOpacity={0} />
-                  </linearGradient>
-                </defs>
+              <LineChart data={evolutionData} margin={{ top: 0, left: -10, right: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
                 <XAxis
                   dataKey="day"
@@ -294,8 +507,13 @@ export default function DashboardPage() {
                 <YAxis
                   axisLine={false}
                   tickLine={false}
-                  tickFormatter={(val) => `R$${(val / 1000).toFixed(0)}k`}
+                  tickFormatter={(val) =>
+                    val >= 1_000_000
+                      ? `R$${(val / 1_000_000).toFixed(1)}M`
+                      : `R$${(val / 1000).toFixed(0)}k`
+                  }
                   tick={{ fill: "var(--text-muted)", fontSize: 12 }}
+                  width={60}
                 />
                 <Tooltip
                   contentStyle={{
@@ -304,50 +522,91 @@ export default function DashboardPage() {
                     borderRadius: "12px",
                     color: "var(--text-primary)",
                   }}
-                  itemStyle={{ fontSize: "14px", fontWeight: "600" }}
-                  formatter={(value: any, name: any) => [
-                    fmt(Number(value) || 0),
-                    name === "current" ? "Atual" : name === "projected" ? "Projetado" : "Mês Anterior",
-                  ]}
+                  itemStyle={{ fontSize: "13px", fontWeight: "600" }}
+                  formatter={(value: any, _name: any, props: any) => {
+                    const key: string = props.dataKey;
+                    if (key === "hist") return [fmt(Number(value) || 0), compareLabel];
+                    if (key === "total") return [fmt(Number(value) || 0), "Total Acumulado"];
+                    if (key === "total_p") return [fmt(Number(value) || 0), "Total (proj.)"];
+                    const isProj = key.endsWith("_p");
+                    const chId = isProj ? key.slice(0, -2) : key;
+                    const chName = channels.find(c => c.id === chId)?.name ?? chId;
+                    return [fmt(Number(value) || 0), isProj ? `${chName} (proj.)` : chName];
+                  }}
                   labelFormatter={(lbl) => `Dia ${lbl}`}
                 />
-                <Area
+                <Line
                   type="monotone"
-                  dataKey="historical"
+                  dataKey="hist"
                   stroke="var(--text-muted)"
-                  fillOpacity={1}
-                  fill="url(#colorHistorical)"
+                  strokeWidth={1.5}
                   strokeDasharray="5 5"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="current"
-                  stroke="var(--accent-blue)"
-                  strokeWidth={2}
-                  fillOpacity={1}
-                  fill="url(#colorCurrent)"
-                />
-                <Area
-                  type="monotone"
-                  dataKey="projected"
-                  stroke="var(--accent-emerald)"
-                  strokeDasharray="3 3"
-                  strokeWidth={2}
-                  fillOpacity={0}
+                  dot={false}
                   connectNulls={false}
                 />
-              </AreaChart>
+                <Line
+                  type="monotone"
+                  dataKey="total"
+                  stroke="var(--accent-blue)"
+                  strokeWidth={2.5}
+                  dot={false}
+                  connectNulls={false}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="total_p"
+                  stroke="var(--accent-blue)"
+                  strokeWidth={2}
+                  strokeDasharray="4 4"
+                  dot={false}
+                  connectNulls={false}
+                />
+                {channels
+                  .filter(ch => effectiveEvolution.has(ch.id))
+                  .flatMap(ch => [
+                    <Line
+                      key={ch.id}
+                      type="monotone"
+                      dataKey={ch.id}
+                      stroke={ch.color}
+                      strokeWidth={2}
+                      dot={false}
+                      connectNulls={false}
+                    />,
+                    <Line
+                      key={ch.id + "_p"}
+                      type="monotone"
+                      dataKey={ch.id + "_p"}
+                      stroke={ch.color}
+                      strokeWidth={2}
+                      strokeDasharray="4 4"
+                      dot={false}
+                      connectNulls={false}
+                    />,
+                  ])}
+              </LineChart>
             </ResponsiveContainer>
           </div>
-          <div className="flex items-center justify-center gap-6 mt-4 opacity-80">
-            <div className="flex items-center gap-2 text-xs">
-              <span className="w-3 h-1 bg-[var(--accent-blue)] rounded-full"></span> Atual
+          <div className="flex items-center justify-center gap-6 mt-4 opacity-70 text-xs flex-wrap">
+            <div className="flex items-center gap-2">
+              <svg width="16" height="6"><line x1="0" y1="3" x2="16" y2="3" stroke="var(--accent-blue)" strokeWidth="2.5"/></svg>
+              Total
             </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="w-3 h-1 bg-[var(--accent-emerald)] rounded-full"></span> Projetado
+            <div className="flex items-center gap-2">
+              <svg width="16" height="6"><line x1="0" y1="3" x2="16" y2="3" stroke="var(--accent-blue)" strokeWidth="2" strokeDasharray="4 3"/></svg>
+              Total (proj.)
             </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="w-3 h-1 bg-[var(--text-muted)] rounded-full"></span> Mês Anterior
+            <div className="flex items-center gap-2">
+              <svg width="16" height="6"><line x1="0" y1="3" x2="16" y2="3" stroke="var(--text-primary)" strokeWidth="2"/></svg>
+              Canal
+            </div>
+            <div className="flex items-center gap-2">
+              <svg width="16" height="6"><line x1="0" y1="3" x2="16" y2="3" stroke="var(--text-primary)" strokeWidth="2" strokeDasharray="4 3"/></svg>
+              Canal (proj.)
+            </div>
+            <div className="flex items-center gap-2">
+              <svg width="16" height="6"><line x1="0" y1="3" x2="16" y2="3" stroke="var(--text-muted)" strokeWidth="1.5" strokeDasharray="5 4"/></svg>
+              {compareLabel}
             </div>
           </div>
         </div>
@@ -393,43 +652,91 @@ export default function DashboardPage() {
         </div>
       </div>
 
-      {/* Target Progress */}
-      {target > 0 && projResult && (
-        <div className="glass-card p-6 animate-in delay-4">
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-sm font-semibold">Progresso vs Meta</p>
-            <p className="text-sm text-[var(--text-muted)]">
-              {pct(projResult.accumulatedTotal / target)} acumulado ·{" "}
-              {pct(projResult.confidence)} de confiança
-            </p>
+      {/* Daily Revenue by Channel */}
+      <div className="glass-card p-6 animate-in delay-4">
+        <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
+          <h2 className="text-sm font-bold text-[var(--text-primary)] tracking-wide">
+            Faturamento Diário por Canal
+          </h2>
+          <div className="flex gap-2 flex-wrap">
+            {channels.map(ch => {
+              const active = effectiveSelected.has(ch.id);
+              return (
+                <button
+                  key={ch.id}
+                  onClick={() => toggleChannel(ch.id, channels, selectedChannels, setSelectedChannels)}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all duration-200"
+                  style={{
+                    backgroundColor: active ? `${ch.color}20` : "rgba(255,255,255,0.04)",
+                    color: active ? ch.color : "var(--text-muted)",
+                    border: `1px solid ${active ? ch.color + "50" : "var(--border-subtle)"}`,
+                  }}
+                >
+                  <span
+                    className="w-2 h-2 rounded-full"
+                    style={{ backgroundColor: active ? ch.color : "var(--text-muted)" }}
+                  />
+                  {ch.name}
+                </button>
+              );
+            })}
           </div>
-          <div className="h-2.5 bg-[var(--bg-secondary)] rounded-full overflow-hidden">
-            <div
-              className="h-full rounded-full transition-all duration-1000"
-              style={{
-                width: `${Math.min(100, (projResult.accumulatedTotal / target) * 100)}%`,
-                background: "linear-gradient(90deg, var(--accent-emerald), var(--accent-blue))",
-              }}
-            />
-          </div>
-          <div className="flex justify-between mt-2 text-xs text-[var(--text-muted)]">
-            <span>Acumulado: {fmt(projResult.accumulatedTotal)}</span>
-            <span>Meta: {fmt(target)}</span>
-          </div>
-          {projResult.targetMet !== undefined && (
-            <p
-              className="mt-2 text-sm font-medium"
-              style={{
-                color: projResult.targetMet ? "var(--accent-emerald)" : "var(--accent-rose)",
-              }}
-            >
-              {projResult.targetMet
-                ? "✓ Projeção indica que a meta será alcançada!"
-                : `✗ Projeção indica ${fmt(target - projResult.projected)} abaixo da meta`}
-            </p>
-          )}
         </div>
-      )}
+        <div className="w-full h-[260px]">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={dailyChannelData} margin={{ top: 0, left: -10, right: 0, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
+              <XAxis
+                dataKey="day"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: "var(--text-muted)", fontSize: 12 }}
+                dy={10}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(val) =>
+                  val >= 1_000_000
+                    ? `R$${(val / 1_000_000).toFixed(1)}M`
+                    : `R$${(val / 1000).toFixed(0)}k`
+                }
+                tick={{ fill: "var(--text-muted)", fontSize: 12 }}
+                width={60}
+              />
+              <Tooltip
+                contentStyle={{
+                  backgroundColor: "var(--bg-card)",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: "12px",
+                  color: "var(--text-primary)",
+                }}
+                itemStyle={{ fontSize: "13px", fontWeight: "600" }}
+                formatter={(value: any, _name: any, props: any) => [
+                  fmt(Number(value) || 0),
+                  channels.find(c => c.id === props.dataKey)?.name ?? props.dataKey,
+                ]}
+                labelFormatter={(lbl) => `Dia ${lbl}`}
+              />
+              {channels
+                .filter(ch => effectiveSelected.has(ch.id))
+                .map(ch => (
+                  <Line
+                    key={ch.id}
+                    type="monotone"
+                    dataKey={ch.id}
+                    stroke={ch.color}
+                    strokeWidth={2}
+                    dot={false}
+                    connectNulls={false}
+                    name={ch.name}
+                  />
+                ))}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
     </div>
   );
 }

@@ -200,7 +200,7 @@ export default function CurrentMonthPage() {
           </div>
           <div className="flex gap-3">
             <button className="btn-primary flex items-center gap-2" onClick={handleSave} disabled={saving}>
-              {editingId ? <Save className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+              {editingId ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
               {editingId ? "Atualizar" : "Adicionar"}
             </button>
             {editingId && (
