@@ -99,10 +99,10 @@ export default function CurrentMonthPage() {
       };
       if (editingId) {
         await updateDoc(doc(db, "sales", editingId), payload);
-        if (user) logAudit(user, "update", "sale", editingId, { channel_id: channelId, amount: parsedAmount, order_count: orderCount ? parseInt(orderCount) : null });
+        if (user) logAudit(user, "update", "sale", editingId, { channel_id: channelId, date, amount: parsedAmount, order_count: orderCount ? parseInt(orderCount) : null });
       } else {
         const ref = await addDoc(collection(db, "sales"), payload);
-        if (user) logAudit(user, "create", "sale", ref.id, { channel_id: channelId, amount: parsedAmount, order_count: orderCount ? parseInt(orderCount) : null });
+        if (user) logAudit(user, "create", "sale", ref.id, { channel_id: channelId, date, amount: parsedAmount, order_count: orderCount ? parseInt(orderCount) : null });
       }
       resetForm();
       fetchData();

@@ -38,7 +38,10 @@ function formatPayload(payload: Record<string, unknown>, channels: SalesChannel[
   if (Object.keys(payload).length === 0) return "—";
   const parts: string[] = [];
   for (const [k, v] of Object.entries(payload)) {
-    if (k === "channel_id") {
+    if (k === "date") {
+      const [y, m, d] = String(v).split("-");
+      parts.push(`Data: ${d}/${m}/${y}`);
+    } else if (k === "channel_id") {
       parts.push(`Canal: ${getChannelName(channels, String(v))}`);
     } else if (k === "amount") {
       parts.push(`Valor: ${fmtCompact(Number(v))}`);
