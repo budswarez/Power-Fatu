@@ -10,6 +10,8 @@ import {
   limit,
 } from "@/lib/firebase";
 import type { AuditEntry, AuditAction, AuditEntity } from "@/lib/audit";
+import type { SalesChannel } from "@/lib/types";
+import { fmtCompact, getChannelName } from "@/lib/format";
 import { ClipboardList, AlertCircle } from "lucide-react";
 
 const ACTION_LABELS: Record<AuditAction, { label: string; color: string }> = {
@@ -32,8 +34,33 @@ function fmtTs(d: Date) {
   });
 }
 
+function formatPayload(payload: Record<string, unknown>, channels: SalesChannel[]): string {
+  if (Object.keys(payload).length === 0) return "—";
+  const parts: string[] = [];
+  for (const [k, v] of Object.entries(payload)) {
+    if (k === "channel_id") {
+      parts.push(`Canal: ${getChannelName(channels, String(v))}`);
+    } else if (k === "amount") {
+      parts.push(`Valor: ${fmtCompact(Number(v))}`);
+    } else if (k === "order_count") {
+      if (v !== null) parts.push(`Pedidos: ${v}`);
+    } else if (k === "name") {
+      parts.push(`Nome: ${v}`);
+    } else if (k === "color") {
+      // skip color hex — not user-friendly
+    } else if (k === "role") {
+      const roleLabels: Record<string, string> = { admin: "Admin", gerente: "Gerente", user: "Usuário" };
+      parts.push(`Perfil: ${roleLabels[String(v)] ?? v}`);
+    } else {
+      parts.push(`${k}: ${v}`);
+    }
+  }
+  return parts.join(" · ") || "—";
+}
+
 export default function AuditPage() {
   const [entries, setEntries] = useState<AuditEntry[]>([]);
+  const [channels, setChannels] = useState<SalesChannel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filterAction, setFilterAction] = useState<AuditAction | "all">("all");
@@ -44,15 +71,17 @@ export default function AuditPage() {
       setLoading(true);
       setError(null);
       try {
-        const snap = await getDocs(
-          query(collection(db, "audit_log"), orderBy("timestamp", "desc"), limit(200))
-        );
-        const list = snap.docs.map(d => ({
+        const [auditSnap, channelsSnap] = await Promise.all([
+          getDocs(query(collection(db, "audit_log"), orderBy("timestamp", "desc"), limit(200))),
+          getDocs(collection(db, "channels")),
+        ]);
+        const list = auditSnap.docs.map(d => ({
           id: d.id,
           ...d.data(),
           timestamp: d.data().timestamp?.toDate?.() ?? new Date(),
         })) as AuditEntry[];
         setEntries(list);
+        setChannels(channelsSnap.docs.map(d => ({ id: d.id, ...d.data() })) as SalesChannel[]);
       } catch (e) {
         console.error(e);
         setError("Erro ao carregar o log de auditoria.");
@@ -178,10 +207,8 @@ export default function AuditPage() {
                       <td className="px-4 py-3 text-[var(--text-secondary)] text-xs">
                         {ENTITY_LABELS[e.entity]}
                       </td>
-                      <td className="hidden sm:table-cell px-4 py-3 text-xs text-[var(--text-muted)] max-w-[200px] truncate">
-                        {Object.keys(e.payload).length > 0
-                          ? JSON.stringify(e.payload).slice(0, 80)
-                          : "—"}
+                      <td className="hidden sm:table-cell px-4 py-3 text-xs text-[var(--text-muted)] max-w-[240px] truncate">
+                        {formatPayload(e.payload, channels)}
                       </td>
                     </tr>
                   );

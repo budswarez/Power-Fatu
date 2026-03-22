@@ -13,6 +13,7 @@ const ROLE_REQUIREMENTS: Array<{ prefix: string; allowed: Role[] }> = [
   { prefix: "/settings",  allowed: ["admin"] },
   { prefix: "/channels",  allowed: ["admin"] },
   { prefix: "/users",     allowed: ["admin"] },
+  { prefix: "/audit",     allowed: ["admin"] },
   { prefix: "/historical", allowed: ["gerente", "admin"] },
   { prefix: "/current",   allowed: ["gerente", "admin"] },
 ];
