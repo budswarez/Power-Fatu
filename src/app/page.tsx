@@ -549,8 +549,8 @@ export default function DashboardPage() {
               })}
             </div>
           </div>
-          <div className="flex-1 w-full min-h-[280px]">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="w-full">
+            <ResponsiveContainer width="100%" height={280}>
               <LineChart data={evolutionData} margin={{ top: 0, left: -10, right: 0, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
                 <XAxis
@@ -745,8 +745,8 @@ export default function DashboardPage() {
             })}
           </div>
         </div>
-        <div className="w-full h-[260px]">
-          <ResponsiveContainer width="100%" height="100%">
+        <div className="w-full">
+          <ResponsiveContainer width="100%" height={260}>
             <LineChart data={dailyChannelData} margin={{ top: 0, left: -10, right: 0, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-subtle)" />
               <XAxis
