@@ -361,8 +361,9 @@ export default function HistoricalPage() {
 
       {/* Month selector */}
       <div className="glass-card p-4 flex flex-col sm:flex-row sm:items-center gap-3">
-        <label className="text-sm text-[var(--text-secondary)] shrink-0">Mês de referência:</label>
+        <label htmlFor="hist-month" className="text-sm text-[var(--text-secondary)] shrink-0">Mês de referência:</label>
         <input
+          id="hist-month"
           type="month"
           value={selectedMonth}
           onChange={(e) => setSelectedMonth(e.target.value)}
@@ -546,24 +547,24 @@ export default function HistoricalPage() {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
               <div>
-                <label className="block text-xs text-[var(--text-muted)] mb-1">Canal</label>
-                <select value={channelId} onChange={(e) => setChannelId(e.target.value)} className="w-full">
+                <label htmlFor="hist-channel" className="block text-xs text-[var(--text-muted)] mb-1">Canal</label>
+                <select id="hist-channel" value={channelId} onChange={(e) => setChannelId(e.target.value)} className="w-full">
                   {channels.map((c) => (
                     <option key={c.id} value={c.id}>{c.name}</option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-xs text-[var(--text-muted)] mb-1">Data</label>
-                <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full" />
+                <label htmlFor="hist-date" className="block text-xs text-[var(--text-muted)] mb-1">Data</label>
+                <input id="hist-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} className="w-full" />
               </div>
               <div>
-                <label className="block text-xs text-[var(--text-muted)] mb-1">Faturamento (R$)</label>
-                <input type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full" />
+                <label htmlFor="hist-amount" className="block text-xs text-[var(--text-muted)] mb-1">Faturamento (R$)</label>
+                <input id="hist-amount" type="number" step="0.01" min="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className="w-full" />
               </div>
               <div>
-                <label className="block text-xs text-[var(--text-muted)] mb-1">Pedidos (opc.)</label>
-                <input type="number" value={orderCount} onChange={(e) => setOrderCount(e.target.value)} className="w-full" />
+                <label htmlFor="hist-orders" className="block text-xs text-[var(--text-muted)] mb-1">Pedidos (opc.)</label>
+                <input id="hist-orders" type="number" value={orderCount} onChange={(e) => setOrderCount(e.target.value)} className="w-full" />
               </div>
             </div>
 
@@ -622,15 +623,17 @@ export default function HistoricalPage() {
                     <td className="px-3 py-2.5 sm:px-5 sm:py-3 text-right">
                       <button
                         onClick={() => startEdit(s)}
+                        aria-label={`Editar lançamento de ${getChannelName(channels, s.channel_id)}`}
                         className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/5 transition-all mr-1"
                       >
-                        <Pencil className="w-3.5 h-3.5" />
+                        <Pencil className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>
                       <button
                         onClick={() => handleDelete(s.id)}
+                        aria-label={`Excluir lançamento de ${getChannelName(channels, s.channel_id)}`}
                         className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-[var(--accent-rose)] hover:bg-[var(--accent-rose)]/10 transition-all"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Trash2 className="w-3.5 h-3.5" aria-hidden="true" />
                       </button>
                     </td>
                   </tr>

@@ -138,6 +138,11 @@ export default function UsersPage() {
     setError(null);
     try {
       const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        setError("Sessão expirada. Recarregue a página e tente novamente.");
+        setEditSaving(false);
+        return;
+      }
       const body: Record<string, string> = {
         name: editName.trim(),
         email: editEmail.trim(),
@@ -171,6 +176,10 @@ export default function UsersPage() {
     setError(null);
     try {
       const token = await auth.currentUser?.getIdToken();
+      if (!token) {
+        setError("Sessão expirada. Recarregue a página e tente novamente.");
+        return;
+      }
       const res = await fetch(`/api/users/${uid}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` },
@@ -239,20 +248,20 @@ export default function UsersPage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-[var(--text-muted)] mb-1">Nome</label>
-              <input type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full" placeholder="Nome completo" />
+              <label htmlFor="edit-name" className="block text-xs text-[var(--text-muted)] mb-1">Nome</label>
+              <input id="edit-name" type="text" value={editName} onChange={(e) => setEditName(e.target.value)} className="w-full" placeholder="Nome completo" />
             </div>
             <div>
-              <label className="block text-xs text-[var(--text-muted)] mb-1">E-mail</label>
-              <input type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className="w-full" placeholder="usuario@empresa.com" />
+              <label htmlFor="edit-email" className="block text-xs text-[var(--text-muted)] mb-1">E-mail</label>
+              <input id="edit-email" type="email" value={editEmail} onChange={(e) => setEditEmail(e.target.value)} className="w-full" placeholder="usuario@empresa.com" />
             </div>
             <div>
-              <label className="block text-xs text-[var(--text-muted)] mb-1">Nova senha <span className="text-[var(--text-muted)] opacity-60">(deixe em branco para manter)</span></label>
-              <input type="password" value={editPassword} onChange={(e) => setEditPassword(e.target.value)} className="w-full" placeholder="Mín. 6 caracteres" />
+              <label htmlFor="edit-password" className="block text-xs text-[var(--text-muted)] mb-1">Nova senha <span className="text-[var(--text-muted)] opacity-60">(deixe em branco para manter)</span></label>
+              <input id="edit-password" type="password" value={editPassword} onChange={(e) => setEditPassword(e.target.value)} className="w-full" placeholder="Mín. 6 caracteres" />
             </div>
             <div>
-              <label className="block text-xs text-[var(--text-muted)] mb-1">Perfil</label>
-              <select value={editRole} onChange={(e) => setEditRole(e.target.value as Role)} className="w-full">
+              <label htmlFor="edit-role" className="block text-xs text-[var(--text-muted)] mb-1">Perfil</label>
+              <select id="edit-role" value={editRole} onChange={(e) => setEditRole(e.target.value as Role)} className="w-full">
                 {ROLES.map((r) => (
                   <option key={r} value={r}>{ROLE_LABELS[r]}</option>
                 ))}
@@ -279,20 +288,20 @@ export default function UsersPage() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="block text-xs text-[var(--text-muted)] mb-1">Nome</label>
-              <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)} className="w-full" placeholder="Nome completo" />
+              <label htmlFor="new-name" className="block text-xs text-[var(--text-muted)] mb-1">Nome</label>
+              <input id="new-name" type="text" value={newName} onChange={(e) => setNewName(e.target.value)} className="w-full" placeholder="Nome completo" />
             </div>
             <div>
-              <label className="block text-xs text-[var(--text-muted)] mb-1">E-mail</label>
-              <input type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className="w-full" placeholder="usuario@empresa.com" />
+              <label htmlFor="new-email" className="block text-xs text-[var(--text-muted)] mb-1">E-mail</label>
+              <input id="new-email" type="email" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} className="w-full" placeholder="usuario@empresa.com" />
             </div>
             <div>
-              <label className="block text-xs text-[var(--text-muted)] mb-1">Senha temporária</label>
-              <input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full" placeholder="Mín. 6 caracteres" />
+              <label htmlFor="new-password" className="block text-xs text-[var(--text-muted)] mb-1">Senha temporária</label>
+              <input id="new-password" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} className="w-full" placeholder="Mín. 6 caracteres" />
             </div>
             <div>
-              <label className="block text-xs text-[var(--text-muted)] mb-1">Perfil</label>
-              <select value={newRole} onChange={(e) => setNewRole(e.target.value as Role)} className="w-full">
+              <label htmlFor="new-role" className="block text-xs text-[var(--text-muted)] mb-1">Perfil</label>
+              <select id="new-role" value={newRole} onChange={(e) => setNewRole(e.target.value as Role)} className="w-full">
                 {ROLES.map((r) => (
                   <option key={r} value={r}>{ROLE_LABELS[r]}</option>
                 ))}
@@ -345,15 +354,17 @@ export default function UsersPage() {
                 </span>
                 <button
                   onClick={() => startEdit(u)}
+                  aria-label={`Editar usuário ${u.name}`}
                   className="p-2 rounded-lg text-[var(--text-muted)] hover:bg-white/5 hover:text-[var(--text-primary)] transition-all"
                 >
-                  <Pencil className="w-4 h-4" />
+                  <Pencil className="w-4 h-4" aria-hidden="true" />
                 </button>
                 <button
                   onClick={() => handleDelete(u.uid, u.name)}
+                  aria-label={`Remover usuário ${u.name}`}
                   className="p-2 rounded-lg text-[var(--text-muted)] hover:bg-[var(--accent-rose)]/10 hover:text-[var(--accent-rose)] transition-all"
                 >
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="w-4 h-4" aria-hidden="true" />
                 </button>
               </div>
             </div>

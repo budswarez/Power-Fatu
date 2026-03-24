@@ -2,14 +2,17 @@
 
 import { useEffect, useState, useMemo, useRef } from "react";
 import { db, collection, getDocs, query, where, Timestamp, doc, getDoc } from "@/lib/firebase";
+import type { QuerySnapshot, DocumentData } from "firebase/firestore";
 import type { SalesChannel, DailySale, SalesRecord } from "@/lib/types";
 import {
   computeConsolidatedProjection,
   projectMonthlyRevenue,
 } from "@/lib/prediction-engine";
 import { fmt } from "@/lib/format";
-import { TrendingUp, Activity, BarChart3, LayoutDashboard, Gauge, AlertTriangle, CheckCircle2, Sheet, GitCompareArrows } from "lucide-react";
+import { TrendingUp, LayoutDashboard, AlertTriangle, CheckCircle2, Sheet, GitCompareArrows } from "lucide-react";
 import { exportSalesToExcel } from "@/lib/export";
+import { KpiCards } from "@/components/kpi-cards";
+import { ChannelBreakdown } from "@/components/channel-breakdown";
 import {
   LineChart,
   Line,
@@ -52,36 +55,6 @@ function toggleChannel(
   set(next);
 }
 
-function diffBadge(current: number, base: number) {
-  if (base <= 0) return null;
-  const diff = (current - base) / base;
-  const pos = diff >= 0;
-  return (
-    <span
-      className="text-xs font-bold px-1.5 py-0.5 rounded-md shrink-0"
-      style={{
-        color: pos ? "var(--accent-emerald)" : "var(--accent-rose)",
-        backgroundColor: pos
-          ? "color-mix(in srgb, var(--accent-emerald) 12%, transparent)"
-          : "color-mix(in srgb, var(--accent-rose) 12%, transparent)",
-      }}
-    >
-      {pos ? "+" : ""}{(diff * 100).toFixed(1)}%
-    </span>
-  );
-}
-
-function confidenceColor(c: number) {
-  if (c >= 0.7) return "var(--accent-emerald)";
-  if (c >= 0.4) return "var(--accent-amber)";
-  return "var(--accent-rose)";
-}
-
-function confidenceLabel(c: number) {
-  if (c >= 0.7) return "Alta";
-  if (c >= 0.4) return "Média";
-  return "Baixa";
-}
 
 export default function DashboardPage() {
   const [channels, setChannels] = useState<SalesChannel[]>([]);
@@ -204,11 +177,11 @@ export default function DashboardPage() {
         const chList = chSnap.docs.map((d) => ({ id: d.id, ...d.data() })) as SalesChannel[];
         setChannels(chList.sort((a, b) => a.name.localeCompare(b.name)));
 
-        const mapSales = (snap: any) =>
-          snap.docs.map((d: any) => ({
+        const mapSales = (snap: QuerySnapshot<DocumentData>): DailySale[] =>
+          snap.docs.map((d) => ({
             id: d.id,
             ...d.data(),
-            date: d.data().date?.toDate?.() ?? new Date(),
+            date: (d.data().date as { toDate?: () => Date } | undefined)?.toDate?.() ?? new Date(),
           })) as DailySale[];
 
         setCurrentSales(mapSales(currSnap));
@@ -373,8 +346,6 @@ export default function DashboardPage() {
     );
   }
 
-  const totalChannelProj = projection.channels.reduce((s, c) => s + c.projectedRevenue, 0);
-
   return (
     <div className="max-w-5xl mx-auto space-y-6 pb-12">
       {/* Header */}
@@ -428,96 +399,15 @@ export default function DashboardPage() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {/* Accumulated */}
-        <div className="glass-card p-6 kpi-blue animate-in delay-1 relative overflow-hidden">
-          <div className="relative z-10">
-            <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-widest mb-2 flex items-center gap-2">
-              <BarChart3 className="w-4 h-4" /> Faturamento Acumulado
-            </p>
-            <p className="text-3xl font-bold text-[var(--text-primary)]">
-              {fmt(projection.totalCurrentRevenue)}
-            </p>
-            <p className="text-sm text-[var(--text-secondary)] mt-1">
-              {projection.totalCurrentOrders} pedidos registrados
-            </p>
-            {comparisonAccumulated > 0 && (
-              <p className="text-xs text-[var(--text-muted)] mt-1.5 flex items-center gap-1.5 flex-wrap">
-                <span>{compareLabel} (até dia {currentDay}): {fmt(comparisonAccumulated)}</span>
-                {diffBadge(projection.totalCurrentRevenue, comparisonAccumulated)}
-              </p>
-            )}
-          </div>
-          <div className="absolute -right-6 -bottom-6 opacity-10 blur-xl">
-            <TrendingUp className="w-32 h-32 text-[var(--accent-blue)]" />
-          </div>
-        </div>
-
-        {/* Projection + confidence + interval */}
-        <div className="glass-card p-6 kpi-emerald animate-in delay-2 relative overflow-hidden shadow-lg glow-emerald">
-          <div className="relative z-10">
-            {projResult && (
-              <span
-                className="absolute top-0 right-0 text-[10px] font-bold px-2 py-0.5 rounded-bl-lg rounded-tr-2xl flex items-center gap-1"
-                style={{
-                  backgroundColor: `color-mix(in srgb, ${confidenceColor(projResult.confidence)} 15%, transparent)`,
-                  color: confidenceColor(projResult.confidence),
-                }}
-              >
-                <Gauge className="w-4 h-4" />
-                {confidenceLabel(projResult.confidence)}
-              </span>
-            )}
-            <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-widest mb-2 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4" /> Projeção Fim do Mês
-            </p>
-            <p className="text-3xl font-bold text-[var(--accent-emerald)]">
-              {fmt(projection.totalProjectedRevenue)}
-            </p>
-            {projResult && (
-              <p className="text-xs text-[var(--text-muted)] mt-0.5">
-                {fmt(projResult.lowerBound)} — {fmt(projResult.upperBound)}
-              </p>
-            )}
-            {comparisonFullMonth > 0 && (
-              <p className="text-xs text-[var(--text-muted)] mt-1.5 flex items-center gap-1.5 flex-wrap">
-                <span>{compareLabel}: {fmt(comparisonFullMonth)}</span>
-                {diffBadge(projection.totalProjectedRevenue, comparisonFullMonth)}
-              </p>
-            )}
-            {target > 0 && (
-              <p
-                className="text-sm font-medium mt-1"
-                style={{
-                  color:
-                    projection.totalProjectedRevenue >= target
-                      ? "var(--accent-emerald)"
-                      : "var(--accent-rose)",
-                }}
-              >
-                Meta {fmt(target)}{" "}
-                {projection.totalProjectedRevenue >= target ? "✓ atingida" : "✗ não atingida"}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Avg Ticket */}
-        <div className="glass-card p-6 kpi-amber animate-in delay-3 relative overflow-hidden">
-          <div className="relative z-10">
-            <p className="text-xs font-semibold text-[var(--text-muted)] uppercase tracking-widest mb-2 flex items-center gap-2">
-              <Activity className="w-4 h-4" /> Ticket Médio Estimado
-            </p>
-            <p className="text-3xl font-bold text-[var(--text-primary)]">
-              {fmt(projection.projectedTicket)}
-            </p>
-            <p className="text-sm text-[var(--text-secondary)] mt-1 flex items-center gap-2 flex-wrap">
-              {compareLabel}: {fmt(projection.historicalTicket)}
-              {diffBadge(projection.projectedTicket, projection.historicalTicket)}
-            </p>
-          </div>
-        </div>
-      </div>
+      <KpiCards
+        projection={projection}
+        projResult={projResult}
+        target={target}
+        compareLabel={compareLabel}
+        comparisonAccumulated={comparisonAccumulated}
+        comparisonFullMonth={comparisonFullMonth}
+        currentDay={currentDay}
+      />
 
       {/* Alert banner */}
       {target > 0 && projection && (() => {
@@ -691,8 +581,8 @@ export default function DashboardPage() {
                     color: "var(--text-primary)",
                   }}
                   itemStyle={{ fontSize: "13px", fontWeight: "600" }}
-                  formatter={(value: any, _name: any, props: any) => {
-                    const key: string = props.dataKey;
+                  formatter={(value: number, _name: string, props: { dataKey?: string }) => {
+                    const key: string = String(props.dataKey ?? "");
                     if (key === "hist") return [fmt(Number(value) || 0), compareLabel];
                     if (key === "total") return [fmt(Number(value) || 0), "Total Acumulado"];
                     if (key === "total_p") return [fmt(Number(value) || 0), "Total (proj.)"];
@@ -787,44 +677,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Channel Breakdown */}
-        <div className="glass-card p-6 flex flex-col">
-          <h2 className="text-sm font-bold text-[var(--text-primary)] mb-6 tracking-wide">
-            Distribuição por Canal
-          </h2>
-          <div className="flex-1 space-y-4">
-            {projection.channels
-              .sort((a, b) => b.projectedRevenue - a.projectedRevenue)
-              .map((ch) => {
-                const sharePct =
-                  totalChannelProj > 0 ? (ch.projectedRevenue / totalChannelProj) * 100 : 0;
-                return (
-                  <div key={ch.channelId} className="space-y-1">
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="flex items-center gap-2">
-                        <span
-                          className="w-2.5 h-2.5 rounded-full shrink-0"
-                          style={{ backgroundColor: ch.channelColor }}
-                        />
-                        <span className="truncate">{ch.channelName}</span>
-                      </span>
-                      <span className="flex items-center gap-2 shrink-0">
-                        <span className="text-xs text-[var(--text-muted)]">
-                          {sharePct.toFixed(1)}%
-                        </span>
-                        <span className="font-semibold">{fmt(ch.projectedRevenue)}</span>
-                      </span>
-                    </div>
-                    <div className="w-full h-2 bg-[var(--bg-secondary)] rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-1000"
-                        style={{ width: `${sharePct}%`, backgroundColor: ch.channelColor }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-          </div>
-        </div>
+        <ChannelBreakdown projection={projection} />
       </div>
 
       {/* Daily Revenue by Channel */}
@@ -887,9 +740,9 @@ export default function DashboardPage() {
                   color: "var(--text-primary)",
                 }}
                 itemStyle={{ fontSize: "13px", fontWeight: "600" }}
-                formatter={(value: any, _name: any, props: any) => [
+                formatter={(value: number, _name: string, props: { dataKey?: string }) => [
                   fmt(Number(value) || 0),
-                  channels.find(c => c.id === props.dataKey)?.name ?? props.dataKey,
+                  channels.find(c => c.id === props.dataKey)?.name ?? String(props.dataKey ?? ""),
                 ]}
                 labelFormatter={(lbl) => `Dia ${lbl}`}
               />
