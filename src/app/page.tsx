@@ -215,7 +215,7 @@ export default function DashboardPage() {
   const projection = useMemo(() => {
     if (!channels.length) return null;
     const currRecords = toSalesRecords(currentSales, "current");
-    const histRecords = toSalesRecords(historicalSales, "historical");
+    const histRecords = toSalesRecords(comparisonSales, "historical");
     return computeConsolidatedProjection(
       channels,
       currRecords,
@@ -223,13 +223,13 @@ export default function DashboardPage() {
       currentMonthNum,
       currentYearNum
     );
-  }, [channels, currentSales, historicalSales, currentMonthNum, currentYearNum]);
+  }, [channels, currentSales, comparisonSales, currentMonthNum, currentYearNum]);
 
   // Detailed projection result (confidence, bounds, target tracking)
   const projResult = useMemo(() => {
     if (currentSales.length === 0) return null;
-    return projectMonthlyRevenue(currentSales, historicalSales, target || undefined);
-  }, [currentSales, historicalSales, target]);
+    return projectMonthlyRevenue(currentSales, comparisonSales, target || undefined);
+  }, [currentSales, comparisonSales, target]);
 
   const evolutionData = useMemo(() => {
     if (!channels.length) return [];
