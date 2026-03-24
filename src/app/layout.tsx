@@ -15,6 +15,10 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+// Prevent static prerendering: Firebase initializes at module load and requires
+// NEXT_PUBLIC_* env vars — they are only guaranteed in the runtime, not at build time.
+export const dynamic = "force-dynamic";
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
