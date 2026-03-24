@@ -67,7 +67,7 @@ export default function CurrentMonthPage() {
         ...d.data(),
         date: d.data().date?.toDate?.() ?? new Date(),
       })) as DailySale[];
-      setSales(sList.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+      setSales(sList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     } catch (e) {
       console.error(e);
       setError("Erro ao carregar dados. Verifique sua conexão e recarregue a página.");
