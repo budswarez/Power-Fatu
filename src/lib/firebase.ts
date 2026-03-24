@@ -15,8 +15,12 @@ import {
   where,
   orderBy,
   limit,
+  startAfter,
   Timestamp,
   type Firestore,
+  type QueryConstraint,
+  type QueryDocumentSnapshot,
+  type DocumentData,
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -63,5 +67,9 @@ export {
   where,
   orderBy,
   limit,
+  startAfter,
   Timestamp,
+  type QueryConstraint,
+  type QueryDocumentSnapshot,
+  type DocumentData,
 };
