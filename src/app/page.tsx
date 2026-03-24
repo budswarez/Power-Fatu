@@ -9,7 +9,7 @@ import {
   projectMonthlyRevenue,
 } from "@/lib/prediction-engine";
 import { fmt } from "@/lib/format";
-import { TrendingUp, LayoutDashboard, AlertTriangle, CheckCircle2, Sheet, GitCompareArrows } from "lucide-react";
+import { TrendingUp, Activity, LayoutDashboard, AlertTriangle, CheckCircle2, Sheet, GitCompareArrows } from "lucide-react";
 import { exportSalesToExcel } from "@/lib/export";
 import { KpiCards } from "@/components/kpi-cards";
 import { ChannelBreakdown } from "@/components/channel-breakdown";
@@ -581,7 +581,7 @@ export default function DashboardPage() {
                     color: "var(--text-primary)",
                   }}
                   itemStyle={{ fontSize: "13px", fontWeight: "600" }}
-                  formatter={(value: number, _name: string, props: { dataKey?: string }) => {
+                  formatter={(value: unknown, _name: unknown, props: { dataKey?: string | number | ((obj: unknown) => unknown) }) => {
                     const key: string = String(props.dataKey ?? "");
                     if (key === "hist") return [fmt(Number(value) || 0), compareLabel];
                     if (key === "total") return [fmt(Number(value) || 0), "Total Acumulado"];
@@ -740,7 +740,7 @@ export default function DashboardPage() {
                   color: "var(--text-primary)",
                 }}
                 itemStyle={{ fontSize: "13px", fontWeight: "600" }}
-                formatter={(value: number, _name: string, props: { dataKey?: string }) => [
+                formatter={(value: unknown, _name: unknown, props: { dataKey?: string | number | ((obj: unknown) => unknown) }) => [
                   fmt(Number(value) || 0),
                   channels.find(c => c.id === props.dataKey)?.name ?? String(props.dataKey ?? ""),
                 ]}

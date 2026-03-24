@@ -18,6 +18,7 @@ import {
   startAfter,
   Timestamp,
   type Firestore,
+  type QueryConstraint,
   type QueryDocumentSnapshot,
   type DocumentData,
 } from "firebase/firestore";
@@ -68,6 +69,7 @@ export {
   limit,
   startAfter,
   Timestamp,
+  type QueryConstraint,
   type QueryDocumentSnapshot,
   type DocumentData,
 };

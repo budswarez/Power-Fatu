@@ -9,6 +9,7 @@ import {
   orderBy,
   limit,
   startAfter,
+  type QueryConstraint,
   type QueryDocumentSnapshot,
   type DocumentData,
 } from "@/lib/firebase";
@@ -83,7 +84,7 @@ export default function AuditPage() {
     else setLoadingMore(true);
     setError(null);
     try {
-      const constraints = [orderBy("timestamp", "desc"), limit(PAGE_SIZE)];
+      const constraints: QueryConstraint[] = [orderBy("timestamp", "desc"), limit(PAGE_SIZE)];
       if (after) constraints.push(startAfter(after));
 
       const [auditSnap, channelsSnap] = await Promise.all([
