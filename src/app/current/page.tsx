@@ -14,7 +14,7 @@ import {
   Timestamp,
 } from "@/lib/firebase";
 import type { SalesChannel, DailySale } from "@/lib/types";
-import { CalendarCheck2, Pencil, Plus, Trash2, AlertCircle } from "lucide-react";
+import { CalendarCheck2, Pencil, Plus, Trash2, AlertCircle, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
 import { fmt, fmtCompact, getChannelName, getChannelColor } from "@/lib/format";
 import { logAudit } from "@/lib/audit";
 import { useAuth } from "@/lib/auth-context";
@@ -39,7 +39,27 @@ export default function CurrentMonthPage() {
   const [orderCount, setOrderCount] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [sortKey, setSortKey] = useState<"date" | "channel" | "amount" | "orders">("date");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const { user } = useAuth();
+
+  function handleSort(key: typeof sortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDir("asc");
+    }
+  }
+
+  const sortedSales = [...sales].sort((a, b) => {
+    let cmp = 0;
+    if (sortKey === "date") cmp = new Date(a.date).getTime() - new Date(b.date).getTime();
+    else if (sortKey === "channel") cmp = getChannelName(channels, a.channel_id).localeCompare(getChannelName(channels, b.channel_id));
+    else if (sortKey === "amount") cmp = a.amount - b.amount;
+    else if (sortKey === "orders") cmp = (a.order_count ?? -1) - (b.order_count ?? -1);
+    return sortDir === "asc" ? cmp : -cmp;
+  });
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -247,15 +267,32 @@ export default function CurrentMonthPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-[var(--border-subtle)] text-left text-[var(--text-muted)]">
-                <th className="px-3 py-2.5 sm:px-5 sm:py-3 font-medium">Data</th>
-                <th className="px-3 py-2.5 sm:px-5 sm:py-3 font-medium">Canal</th>
-                <th className="px-3 py-2.5 sm:px-5 sm:py-3 font-medium text-right">Faturamento</th>
-                <th className="hidden sm:table-cell px-5 py-3 font-medium text-right">Pedidos</th>
+                {(["date", "channel", "amount", "orders"] as const).map((key) => {
+                  const labels: Record<typeof key, string> = { date: "Data", channel: "Canal", amount: "Faturamento", orders: "Pedidos" };
+                  const isActive = sortKey === key;
+                  const Icon = isActive ? (sortDir === "asc" ? ChevronUp : ChevronDown) : ChevronsUpDown;
+                  const isRight = key === "amount" || key === "orders";
+                  const isHidden = key === "orders";
+                  return (
+                    <th
+                      key={key}
+                      className={`px-3 py-2.5 sm:px-5 sm:py-3 font-medium${isRight ? " text-right" : ""}${isHidden ? " hidden sm:table-cell" : ""}`}
+                    >
+                      <button
+                        onClick={() => handleSort(key)}
+                        className={`inline-flex items-center gap-1 hover:text-[var(--text-primary)] transition-colors${isRight ? " flex-row-reverse" : ""}${isActive ? " text-[var(--text-primary)]" : ""}`}
+                      >
+                        {labels[key]}
+                        <Icon className="w-3 h-3 shrink-0" />
+                      </button>
+                    </th>
+                  );
+                })}
                 <th className="px-3 py-2.5 sm:px-5 sm:py-3 font-medium text-right">Ações</th>
               </tr>
             </thead>
             <tbody>
-              {sales.map((s) => {
+              {sortedSales.map((s) => {
                 const d = new Date(s.date);
                 return (
                   <tr key={s.id} className="border-b border-[var(--border-subtle)]/50 hover:bg-white/[0.02] transition-colors">
