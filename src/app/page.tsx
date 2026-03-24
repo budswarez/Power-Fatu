@@ -609,11 +609,11 @@ export default function DashboardPage() {
                   connectNulls={false}
                 />
                 <Line
-                  type="monotone"
+                  type="linear"
                   dataKey="total_p"
                   stroke="var(--accent-blue)"
                   strokeWidth={2}
-                  strokeDasharray="4 4"
+                  strokeDasharray="6 4"
                   dot={false}
                   connectNulls={false}
                 />
@@ -640,11 +640,11 @@ export default function DashboardPage() {
                     />,
                     <Line
                       key={ch.id + "_p"}
-                      type="monotone"
+                      type="linear"
                       dataKey={ch.id + "_p"}
                       stroke={ch.color}
                       strokeWidth={2}
-                      strokeDasharray="4 4"
+                      strokeDasharray="6 4"
                       dot={false}
                       connectNulls={false}
                     />,
@@ -658,7 +658,7 @@ export default function DashboardPage() {
               Total
             </div>
             <div className="flex items-center gap-2">
-              <svg width="16" height="6"><line x1="0" y1="3" x2="16" y2="3" stroke="var(--accent-blue)" strokeWidth="2" strokeDasharray="4 3"/></svg>
+              <svg width="16" height="6"><line x1="0" y1="3" x2="16" y2="3" stroke="var(--accent-blue)" strokeWidth="2" strokeDasharray="6 4"/></svg>
               Total (proj.)
             </div>
             <div className="flex items-center gap-2">
@@ -666,7 +666,7 @@ export default function DashboardPage() {
               Canal
             </div>
             <div className="flex items-center gap-2">
-              <svg width="16" height="6"><line x1="0" y1="3" x2="16" y2="3" stroke="var(--text-primary)" strokeWidth="2" strokeDasharray="4 3"/></svg>
+              <svg width="16" height="6"><line x1="0" y1="3" x2="16" y2="3" stroke="var(--text-primary)" strokeWidth="2" strokeDasharray="6 4"/></svg>
               Canal (proj.)
             </div>
             <div className="flex items-center gap-2">
