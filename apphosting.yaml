@@ -1,0 +1,28 @@
+runConfig:
+  concurrency: 80
+  cpu: 1
+  memoryMiB: 512
+  minInstances: 0
+
+env:
+  # Variáveis públicas — client SDK (expostas no bundle do browser)
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: "AIzaSyDtLFTuopp8Z27uIt5kHn0ME2FPDYTTL-Y"
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: "pfat-cfc0c.firebaseapp.com"
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: "pfat-cfc0c"
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: "pfat-cfc0c.firebasestorage.app"
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "859398803452"
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:859398803452:web:0467ed123340de51f56c79"
+
+  # Variáveis sensíveis — Admin SDK (Secret Manager)
+  - variable: FIREBASE_ADMIN_PROJECT_ID
+    secret: firebase-admin-project-id
+  - variable: FIREBASE_ADMIN_CLIENT_EMAIL
+    secret: firebase-admin-client-email
+  - variable: FIREBASE_ADMIN_PRIVATE_KEY
+    secret: firebase-admin-private-key
